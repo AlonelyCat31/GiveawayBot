@@ -17,6 +17,9 @@ const token = process.env.token;
 // Store game codes in memory
 let gameCodes = {};
 
+// Admin user IDs
+const allowedUsers = ['1276654206421307402', '489005003386650634'];
+
 client.once('ready', () => {
   console.log(`✅ Bot is online as ${client.user.tag}`);
 });
@@ -28,6 +31,13 @@ client.on('interactionCreate', async interaction => {
 
   if (interaction.isChatInputCommand()) {
     const { commandName } = interaction;
+
+    // Check admin permission
+    if (['addcode', 'list', 'giveaway'].includes(commandName)) {
+      if (!allowedUsers.includes(interaction.user.id)) {
+        return interaction.reply({ content: '❌ You are not authorized to use this command.', ephemeral: true });
+      }
+    }
 
     if (commandName === 'addcode') {
       const game = interaction.options.getString('game');
