@@ -17,6 +17,7 @@ module.exports = async function handleClaim(interaction, gameCodes) {
   try {
     await interaction.user.send(
       `🎉 You claimed **${gameName}**!\nHere is your code: \`${code}\``
+      `Hosted by: **${message.author.tag}**`
     );
 
     const claimedPath = path.join(__dirname, "../logs/claimedCodes.json");
