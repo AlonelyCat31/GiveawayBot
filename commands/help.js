@@ -11,7 +11,8 @@ module.exports = {
           "`!addcode <GameName> <Code>` - Add a new game code",
           "`!list` - List available games (no codes shown)",
           "`!drop <GameName>` - Drop a code for claiming",
-          "`!help` - Show this help message",
+          "`!setuprole` - Setup a role for addcode, list and drop commands",
+          "`!help` - Show this help message",          
         ].join("\n")
       );
     return message.reply({ embeds: [embed] });
