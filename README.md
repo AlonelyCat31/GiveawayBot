@@ -1,26 +1,11 @@
-# Discord Giveaway Bot
-
-This bot allows you to distribute game codes through giveaways.
+## Overview
+This Discord bot is designed to manage game codes and facilitate giveaways within a server. It allows authorized users to add game codes, list available games, and drop codes for claiming.
 
 ## Features
-
-- List available game codes
-- Claim a game code by pressing a button
-- Add new game codes manually by the bot owner
-
-## Setup
-
-1. Clone this repository.
-2. Install dependencies:  
-   `npm install`
-3. Add your Discord bot token to the `.env` file:  
-   `DISCORD_BOT_TOKEN=your-bot-token-here`
-4. Run the bot:  
-   `npm start`
-
-## Commands
-
-- `!giveaway` - Start a giveaway.
-- `!list` - List the available game codes.
-- `!addcode <game_name> <code>` - Add a new game code (bot owner only).
-   
+- **Commands:**
+  - `!addcode <GameName> <Code>`: Add a new game code (authorized roles only).
+  - `!list`: List available games (authorized roles only).
+  - `!drop <GameName>`: Drop a code for claiming (authorized roles only).
+  - `!setuprole <RoleName>`: Authorize a role to use code management commands (admin only).
+  - `!setlogchannel`: Set the current channel as the log channel (admin only).
+  - `!help`: Show this help message.
