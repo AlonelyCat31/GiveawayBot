@@ -15,8 +15,9 @@ module.exports = {
     }
 
     const gameName = args.join(" ");
-    if (!gameName || !gameCodes[gameName])
+    if (!gameName || !gameCodes[gameName]) {
       return message.reply("That game is not available.");
+    }
 
     const embed = new EmbedBuilder()
       .setTitle(`🎮 ${gameName} Code Drop!`)
@@ -30,6 +31,7 @@ module.exports = {
         .setStyle(ButtonStyle.Success)
     );
 
+    // Send the embed message with the claim button
     return message.channel.send({ embeds: [embed], components: [row] });
   },
 };
