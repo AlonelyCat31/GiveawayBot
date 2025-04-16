@@ -62,10 +62,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 
-// Background task: post claimed codes after 24 hours
+// Background task: post claimed codes after the specified interval
 setInterval(() => {
   const claimedPath = path.join(__dirname, "claimedCodes.json");
   const logConfigPath = path.join(__dirname, "logchannel.json");
+  const timerConfigPath = path.join(__dirname, "timer.json");
 
   if (!fs.existsSync(claimedPath) || !fs.existsSync(logConfigPath)) return;
 
@@ -75,15 +76,16 @@ setInterval(() => {
   if (!channel) return;
 
   const now = Date.now();
-  const dayMs = 24 * 60 * 60 * 1000;
+  const timer = fs.existsSync(timerConfigPath) ? JSON.parse(fs.readFileSync(timerConfigPath)).timer : 24; // Default to 24 hours
+  const intervalMs = timer * 60 * 60 * 1000; // Convert hours to milliseconds
 
   for (const [game, info] of Object.entries(claimed)) {
     const claimedAt = new Date(info.claimedAt).getTime();
-    if (now - claimedAt >= dayMs) {
+    if (now - claimedAt >= intervalMs) {
       channel.send(`🕓 **${game}** was claimed by **${info.claimedBy}** at ${new Date(info.claimedAt).toLocaleString()}. Code: \`${info.code}\``);
       delete claimed[game];
     }
   }
 
   fs.writeFileSync(claimedPath, JSON.stringify(claimed, null, 2));
-}, 60 * 60 * 1000); // every hour
+}, 60 * 60 * 1000); // Check every hour
