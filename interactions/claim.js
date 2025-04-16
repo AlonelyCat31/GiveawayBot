@@ -36,6 +36,18 @@ module.exports = async function handleClaim(interaction, gameCodes) {
 
     fs.writeFileSync(claimedPath, JSON.stringify(claimedCodes, null, 2));
 
+    // Log the hosted code in the log channel if it was hosted
+    if (type === "host") {
+      const logConfigPath = path.join(__dirname, "../logchannel.json");
+      if (fs.existsSync(logConfigPath)) {
+        const { channelId } = JSON.parse(fs.readFileSync(logConfigPath));
+        const logChannel = interaction.client.channels.cache.get(channelId);
+        if (logChannel) {
+          logChannel.send(`🕓 **${gameName}** was hosted by **${interaction.user.tag}**. Code: \`${code}\``);
+        }
+      }
+    }
+
     await interaction.update({
       embeds: [
         new EmbedBuilder()
