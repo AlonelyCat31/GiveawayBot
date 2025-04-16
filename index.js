@@ -76,8 +76,8 @@ setInterval(() => {
   if (!channel) return;
 
   const now = Date.now();
-  const timer = fs.existsSync(timerConfigPath) ? JSON.parse(fs.readFileSync(timerConfigPath)).timer : 24; // Default to 24 hours
-  const intervalMs = timer * 60 * 60 * 1000; // Convert hours to milliseconds
+  const timer = fs.existsSync(timerConfigPath) ? JSON.parse(fs.readFileSync(timerConfigPath)).timer : 86400; // Default to 24 hours in seconds
+  const intervalMs = timer * 1000; // Convert seconds to milliseconds
 
   for (const [game, info] of Object.entries(claimed)) {
     const claimedAt = new Date(info.claimedAt).getTime();
