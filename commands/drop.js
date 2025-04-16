@@ -8,6 +8,12 @@ const {
 module.exports = {
   name: "drop",
   execute(message, args, gameCodes) {
+    const allowedRoles = require("../roles.json");
+    const userRoles = message.member.roles.cache;
+    if (!Object.values(allowedRoles).some(roleId => userRoles.has(roleId))) {
+      return message.reply("You don't have permission to use this command.");
+    }
+
     const gameName = args.join(" ");
     if (!gameName || !gameCodes[gameName])
       return message.reply("That game is not available.");
