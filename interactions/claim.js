@@ -3,7 +3,9 @@ const fs = require("fs");
 const path = require("path");
 
 module.exports = async function handleClaim(interaction, gameCodes) {
-  const [action, gameName] = interaction.customId.split("_");
+  const [action, type, gameName] = interaction.customId.split("_");
+  
+  // Check if the action is valid
   if (action !== "claim" || !gameCodes[gameName]) {
     return interaction.reply({
       content: "This code has already been claimed or is invalid.",
@@ -29,6 +31,7 @@ module.exports = async function handleClaim(interaction, gameCodes) {
       code,
       claimedBy: interaction.user.tag,
       claimedAt: new Date().toISOString(),
+      type: type === "host" ? "hosted" : "added", // Track the type of claim
     };
 
     fs.writeFileSync(claimedPath, JSON.stringify(claimedCodes, null, 2));
