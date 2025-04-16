@@ -135,11 +135,5 @@ client.on(Events.InteractionCreate, async (interaction) => {
       ],
       components: [],
     });
-  } catch (err) {
-    console.error("Failed to DM the user:", err);
-    interaction.reply({
-      content: "Failed to DM you the code. Do you have DMs disabled?",
-      ephemeral: true,
-    });
-  }
+  } 
 });
