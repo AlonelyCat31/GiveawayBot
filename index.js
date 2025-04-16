@@ -1,120 +1,62 @@
-require('dotenv').config();
-const { Client, GatewayIntentBits, Partials, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Events } = require('discord.js');
+require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
+const {
+  Client,
+  GatewayIntentBits,
+  Partials,
+  Events,
+} = require("discord.js");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMessageReactions,
-    GatewayIntentBits.DirectMessages
+    GatewayIntentBits.DirectMessages,
   ],
-  partials: [Partials.Channel] // Required to receive DMs (even if we block command handling there)
+  partials: [Partials.Channel],
 });
 
-const token = process.env.token;
+const gameCodes = {};
+const commands = new Map();
 
-// Store game codes in memory
-let gameCodes = {};
+// Load commands dynamically
+const commandFiles = fs.readdirSync(path.join(__dirname, "commands"));
+for (const file of commandFiles) {
+  const command = require(`./commands/${file}`);
+  commands.set(command.name, command.execute);
+}
 
-// Admin user IDs
-const allowedUsers = ['<@1276654206421307402>', '<@489005003386650634>'];
+console.log("Bot is starting...");
 
-client.once('ready', () => {
-  console.log(`✅ Bot is online as ${client.user.tag}`);
+client.once(Events.ClientReady, () => {
+  console.log(`${client.user.tag} is online and ready!`);
 });
 
-client.on('interactionCreate', async interaction => {
-  if (!interaction.guild) {
-    return interaction.reply({ content: 'Commands cannot be used in DMs.', ephemeral: true });
-  }
+client.on("error", (err) => {
+  console.error("An error occurred:", err);
+});
 
-  if (interaction.isChatInputCommand()) {
-    const { commandName } = interaction;
+client.login(process.env.token).then(() => {
+  console.log("Bot logged in successfully!");
+}).catch(console.error);
 
-    // Check admin permission
-    if (['addcode', 'list', 'giveaway'].includes(commandName)) {
-      if (!allowedUsers.includes(interaction.user.id)) {
-        return interaction.reply({ content: '❌ You are not authorized to use this command.', ephemeral: true });
-      }
-    }
+// Handle message commands
+client.on(Events.MessageCreate, async (message) => {
+  if (!message.content.startsWith("!") || message.author.bot) return;
 
-    if (commandName === 'addcode') {
-      const game = interaction.options.getString('game');
-      const code = interaction.options.getString('code');
-
-      if (!gameCodes[game]) {
-        gameCodes[game] = [];
-      }
-
-      gameCodes[game].push(code);
-      await interaction.reply(`✅ Code added for **${game}**.`);
-    }
-
-    if (commandName === 'list') {
-      const embed = new EmbedBuilder()
-        .setTitle('🎮 Available Games')
-        .setDescription(Object.keys(gameCodes).length > 0 ? Object.keys(gameCodes).join('\n') : 'No games currently available.')
-        .setColor('Blue');
-      await interaction.reply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (commandName === 'giveaway') {
-      const game = interaction.options.getString('game');
-
-      if (!gameCodes[game] || gameCodes[game].length === 0) {
-        return interaction.reply(`❌ No codes available for **${game}**.`);
-      }
-
-      const embed = new EmbedBuilder()
-        .setTitle(`🎁 Code Giveaway: ${game}`)
-        .setDescription(`Click the button below to claim a code for **${game}**!`)
-        .setColor('Green');
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`claim_${game}`)
-          .setLabel('Claim')
-          .setStyle(ButtonStyle.Primary)
-      );
-
-      await interaction.reply({ embeds: [embed], components: [row] });
-    }
-  }
-
-  if (interaction.isButton()) {
-    const [action, game] = interaction.customId.split('_');
-    if (action === 'claim') {
-      if (!gameCodes[game] || gameCodes[game].length === 0) {
-        return interaction.reply({ content: '❌ Sorry, all codes have been claimed.', ephemeral: true });
-      }
-
-      const code = gameCodes[game].shift();
-
-      try {
-        await interaction.user.send(`🎮 Here is your code for **${game}**: \`${code}\``);
-        await interaction.update({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(`🎁 Code Claimed: ${game}`)
-              .setDescription(`✅ Claimed by <@${interaction.user.id}>`)
-              .setColor('Green')
-          ],
-          components: []
-        });
-      } catch (err) {
-        await interaction.reply({ content: '❌ Unable to DM you. Please make sure your DMs are open.', ephemeral: true });
-        gameCodes[game].unshift(code); // push it back if DM fails
-      }
-    }
+  const [cmd, ...args] = message.content.slice(1).split(" ");
+  const commandFn = commands.get(cmd.toLowerCase());
+  if (commandFn) {
+    commandFn(message, args, gameCodes);
   }
 });
 
-client.on(Events.MessageCreate, message => {
-  if (!message.guild) return; // Ignore DMs
-  if (message.content === '!ping') {
-    message.reply('Pong!');
-  }
-});
+// Handle interactions
+const handleClaim = require("./interactions/claim.js");
 
-client.login(token);
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isButton()) return;
+  await handleClaim(interaction, gameCodes);
+});
