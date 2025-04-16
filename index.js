@@ -18,7 +18,7 @@ const token = process.env.token;
 let gameCodes = {};
 
 // Admin user IDs
-const allowedUsers = ['1276654206421307402', '489005003386650634'];
+const allowedUsers = ['<@1276654206421307402>', '<@489005003386650634>'];
 
 client.once('ready', () => {
   console.log(`✅ Bot is online as ${client.user.tag}`);
