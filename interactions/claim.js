@@ -14,6 +14,16 @@ module.exports = async function handleClaim(interaction, gameCodes) {
   }
 
   const code = gameCodes[gameName];
+  
+  // Check if the code is already claimed
+  if (!code) {
+    return interaction.reply({
+      content: "This code has already been claimed or is invalid.",
+      ephemeral: true,
+    });
+  }
+
+  // Remove the code from the available codes
   delete gameCodes[gameName];
 
   try {
