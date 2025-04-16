@@ -12,8 +12,9 @@ module.exports = {
           "`!list` - List available games (authorized roles only)",
           "`!drop <GameName>` - Drop a code for claiming (authorized roles only)",
           "`!setuprole <RoleName>` - Authorize a role to use code management commands (admin only)",
-          "`!setlogchannel` - Set current channel as the log channel (admin only)",
+          "`!setlogchannel <#channel>` - Set a channel as the log channel (admin only)",
           "Claimed codes will be posted here 24 hours after being claimed.",
+          "`!host <GameName> <Code> <Platform>` - Host your own game code",
           "`!help` - Show this help message",
         ].join("\n")
       );
