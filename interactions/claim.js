@@ -14,7 +14,7 @@ module.exports = async function handleClaim(interaction, gameCodes) {
 
   try {
     await interaction.user.send(
-      `🎉 You claimed **${gameName}**!\nHere is your code: \\`${code}\\``
+      `🎉 You claimed **${gameName}**!\nHere is your code: \`${code}\``
     );
     await interaction.update({
       embeds: [
