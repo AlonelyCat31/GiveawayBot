@@ -1,5 +1,4 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
-
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
 const giveaways = {};  // Object to store giveaways
@@ -28,14 +27,24 @@ client.on('messageCreate', async (message) => {
         // Everything before the last two arguments is the game name
         const gameName = args.slice(1, args.length - 2).join(' ');
 
-        // Check if the giveaway already exists
-        if (giveaways[gameName] && giveaways[gameName].claimed) {
-            return message.reply(`The giveaway for ${gameName} has already been claimed!`);
+        // Generate a unique ID for this giveaway (could be based on the current timestamp)
+        const giveawayId = `${gameName}-${Date.now()}`;
+
+        // Check if the giveaway already exists for this unique giveaway ID
+        if (!giveaways[giveawayId]) {
+            giveaways[giveawayId] = {
+                host: message.author.tag,
+                gameName: gameName,
+                code: code,
+                platform: platform,
+                claimed: false,
+                messageId: null
+            };
         }
 
         // Create a button for claiming the game key
         const claimButton = new ButtonBuilder()
-            .setCustomId('claim_button')
+            .setCustomId(`claim_button_${giveawayId}`)
             .setLabel('Claim Key')
             .setStyle(ButtonStyle.Success);
 
@@ -52,14 +61,8 @@ client.on('messageCreate', async (message) => {
         // Send the embed with the claim button
         const giveawayMessage = await message.channel.send({ embeds: [embed], components: [row] });
 
-        // Store giveaway details in the `giveaways` object
-        giveaways[gameName] = {
-            host: message.author.tag,
-            code: code,
-            platform: platform,
-            claimed: false,
-            messageId: giveawayMessage.id
-        };
+        // Store giveaway details in the `giveaways` object, including the message ID
+        giveaways[giveawayId].messageId = giveawayMessage.id;
 
         // Delete the original command message
         await message.delete();
@@ -86,11 +89,12 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
-    const gameName = Object.keys(giveaways).find((key) => giveaways[key].messageId === interaction.message.id);
-    
-    if (!gameName) return;
+    // Get the giveaway ID from the button custom ID
+    const giveawayId = interaction.customId.split('_').slice(2).join('_');  // Extract the unique giveaway ID from the button ID
 
-    const giveaway = giveaways[gameName];
+    if (!giveaways[giveawayId]) return;
+
+    const giveaway = giveaways[giveawayId];
 
     if (giveaway.claimed) {
         // If the key has already been claimed, inform the user
@@ -103,7 +107,7 @@ client.on('interactionCreate', async (interaction) => {
 
         // Send the game code to the user via DM
         try {
-            await interaction.user.send(`Congratulations! You've claimed the key for **${gameName}** (${giveaway.platform}): **${giveaway.code}**`);
+            await interaction.user.send(`Congratulations! You've claimed the key for **${giveaway.gameName}** (${giveaway.platform}): **${giveaway.code}**`);
         } catch (error) {
             console.error('Could not send DM to user:', error);
         }
@@ -111,7 +115,7 @@ client.on('interactionCreate', async (interaction) => {
         // Update the giveaway message to show who claimed it
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
-            .setTitle(`Game Giveaway: ${gameName}`)
+            .setTitle(`Game Giveaway: ${giveaway.gameName}`)
             .setDescription(`Hosted by: ${giveaway.host}\nPlatform: ${giveaway.platform}`)
             .addFields({
                 name: 'Claimed by:',
@@ -125,7 +129,7 @@ client.on('interactionCreate', async (interaction) => {
 
         // Optionally, send a confirmation message to the user
         if (!interaction.replied) {
-            await interaction.followUp({ content: `You have successfully claimed the key for **${gameName}**!`, ephemeral: true });
+            await interaction.followUp({ content: `You have successfully claimed the key for **${giveaway.gameName}**!`, ephemeral: true });
         }
     }
 });
