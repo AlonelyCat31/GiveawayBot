@@ -1,6 +1,6 @@
-const { EmbedBuilder } = require("discord.js");
-const fs = require("fs");
-const path = require("path");
+import { EmbedBuilder } = require("discord.js");
+import fs = require("fs");
+import path = require("path");
 
 module.exports = async function handleClaim(interaction, gameCodes) {
   const [action, gameName] = interaction.customId.split("_");
