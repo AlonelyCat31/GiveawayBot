@@ -37,36 +37,12 @@ client.on('messageCreate', async (message) => {
         }
 
         // Detect timer args
-        const hasTimer = args.slice(-4).every(arg => /^\d+$/.test(arg));
-        const timeArgs = hasTimer ? args.slice(-4) : ['1', '0', '0', '0'];
-        const timeOffset = hasTimer ? 4 : 0;
+        let hasTimer = args.slice(-4).every(arg => /^\d+$/.test(arg));
+        let timeArgs = hasTimer ? args.slice(-4) : ['1', '0', '0', '0'];
 
-        const platformEndIndex = args.length - timeOffset;
-        let codeIndex = platformEndIndex - 1;
-
-        // Backtrack to find the code (assume it's a single word)
-        let code = args[codeIndex];
-
-        // Try up to 10-word platforms
-        let platform = args.slice(codeIndex + 1, platformEndIndex).join(' ');
-        let gameName = args.slice(1, codeIndex).join(' ');
-
-        // Adjust for platform possibly having more than one word
-        for (let i = 1; i <= 10 && codeIndex - i > 0; i++) {
-            const potentialCode = args[codeIndex - i + 1];
-            const potentialGameName = args.slice(1, codeIndex - i + 1).join(' ');
-            const potentialPlatform = args.slice(codeIndex - i + 2, platformEndIndex).join(' ');
-            if (potentialGameName && potentialPlatform) {
-                code = potentialCode;
-                gameName = potentialGameName;
-                platform = potentialPlatform;
-                break;
-            }
-        }
-
-        if (!gameName || !code || !platform) {
-            return message.reply('Please make sure you include a game name, code, and platform name.');
-        }
+        let platform = hasTimer ? args.slice(-5, -4).join(' ') : args.slice(-2, -1).join(' ');
+        let code = hasTimer ? args[args.length - 6] : args[args.length - 2];
+        let gameName = args.slice(1, args.length - (hasTimer ? 6 : 2)).join(' ');
 
         const [days, hours, minutes, seconds] = timeArgs.map(Number);
         const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
