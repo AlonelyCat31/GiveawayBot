@@ -1,9 +1,15 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { Client, GatewayIntentBits, Partials, Events } from 'discord.js';
 
 dotenv.config();
+
+// Replicating __dirname in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const client = new Client({
   intents: [
