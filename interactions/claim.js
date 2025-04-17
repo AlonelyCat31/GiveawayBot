@@ -4,20 +4,21 @@ const path = require("path");
 
 module.exports = async function handleClaim(interaction, gameCodes) {
   const [action, gameName] = interaction.customId.split("_");
-  if (action !== "claim" || !gameCodes[gameName]) {
+  const gameData = gameCodes[gameName];
+
+  if (action !== "claim" || !gameData) {
     return interaction.reply({
       content: "This code has already been claimed or is invalid.",
       ephemeral: true,
     });
   }
 
-  const code = gameCodes[gameName];
+  const { code, host } = gameData;
   delete gameCodes[gameName];
 
   try {
     await interaction.user.send(
-      `🎉 You claimed **${gameName}**!\nHere is your code: \`${code}\``
-      `Hosted by: **${message.author.tag}**`
+      `🎉 You claimed **${gameName}**!\nHere is your code: \`${code}\`\nHosted by: **${host}**`
     );
 
     const claimedPath = path.join(__dirname, "../logs/claimedCodes.json");
@@ -29,6 +30,7 @@ module.exports = async function handleClaim(interaction, gameCodes) {
       code,
       claimedBy: interaction.user.tag,
       claimedAt: new Date().toISOString(),
+      hostedBy: host,
     };
 
     fs.writeFileSync(claimedPath, JSON.stringify(claimedCodes, null, 2));
@@ -37,7 +39,9 @@ module.exports = async function handleClaim(interaction, gameCodes) {
       embeds: [
         new EmbedBuilder()
           .setTitle(`🎉 ${gameName} Claimed!`)
-          .setDescription(`Claimed by: **${interaction.user.tag}**`)
+          .setDescription(
+            `Claimed by: **${interaction.user.tag}**\nHosted by: **${host}**`
+          )
           .setColor("Red"),
       ],
       components: [],
