@@ -40,10 +40,8 @@ client.on('messageCreate', async (message) => {
         let hasTimer = args.slice(-4).every(arg => /^\d+$/.test(arg)); // Check if last four args are numbers
         let timeArgs = hasTimer ? args.slice(-4) : ['1', '0', '0', '0']; // Default to 1 day if no valid timer
 
-        // Platform is always the last argument (before the timer)
+        // Platform is everything after the code, code is the last argument before the platform
         let platform = hasTimer ? args.slice(-5).join(' ') : args.slice(-1).join(' ');
-
-        // Code is always the second last argument (before the platform)
         let code = hasTimer ? args[args.length - 6] : args[args.length - 2];
 
         // The rest is the game name
