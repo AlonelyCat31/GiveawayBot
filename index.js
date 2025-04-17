@@ -1,36 +1,6 @@
-require('dotenv').config();
-const {
-    Client,
-    GatewayIntentBits,
-    EmbedBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    ActionRowBuilder
-} = require('discord.js');
-const fs = require('fs');
-const path = require('path');
+const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { keepAlive } = require('./keep_alive.js');
-
-const DATA_FILE = path.join(__dirname, 'giveaways.json');
-
-// Function to load giveaways from the JSON file
-function loadGiveaways() {
-    if (fs.existsSync(DATA_FILE)) {
-        try {
-            return JSON.parse(fs.readFileSync(DATA_FILE));
-        } catch (e) {
-            console.error('Failed to load giveaways:', e);
-        }
-    }
-    return {};
-}
-
-// Function to save giveaways back to the JSON file
-function saveGiveaways() {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(giveaways, null, 2));
-}
-
-const giveaways = loadGiveaways(); // Load active giveaways on startup
+const { saveGiveaways, loadGiveaways } = require('./giveawayManager.js');
 
 const client = new Client({
     intents: [
@@ -40,7 +10,9 @@ const client = new Client({
     ]
 });
 
-client.once('ready', () => {
+const giveaways = loadGiveaways(); // Load active giveaways from the file
+
+client.once('ready', async () => {
     console.log(`${client.user.tag} is now online!`);
 
     // Restore giveaways and reset their timeouts if necessary
@@ -62,7 +34,7 @@ client.once('ready', () => {
 
                     // Notify the host and delete the giveaway from memory
                     try {
-                        const host = await client.users.fetch(giveaway.hostId);
+                        const host = await client.users.fetch(giveaway.hostId); // Ensure async here
                         await host.send(`Your giveaway for **${giveaway.gameName}** has expired. No one claimed the code.`);
                     } catch (err) {
                         console.error('Failed to notify host:', err);
@@ -74,7 +46,7 @@ client.once('ready', () => {
             } else {
                 // If the giveaway already expired, notify the host and remove it
                 try {
-                    const host = await client.users.fetch(giveaway.hostId);
+                    const host = await client.users.fetch(giveaway.hostId); // Ensure async here
                     await host.send(`Your giveaway for **${giveaway.gameName}** has expired. No one claimed the code.`);
                 } catch (err) {
                     console.error('Failed to notify host:', err);
@@ -87,10 +59,10 @@ client.once('ready', () => {
     }
 });
 
-// Command to host a giveaway
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // !host <game name> <code> <platform> [days hours minutes seconds]
     if (message.content.startsWith('!host')) {
         const args = message.content.trim().split(/\s+/);
 
@@ -98,22 +70,15 @@ client.on('messageCreate', async (message) => {
             return message.reply('Usage: !host <game name> <code> <platform> [days hours minutes seconds]');
         }
 
-        let timeInMs = 86400000; // default: 1 day
-        let baseArgs = args.slice(1);
+        const timeArgs = args.slice(-4).every(arg => /^\d+$/.test(arg)) ? args.slice(-4) : ['1', '0', '0', '0'];
+        const [days, hours, minutes, seconds] = timeArgs.map(Number);
+        const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
 
-        if (args.length >= 8 && args.slice(-4).every(arg => /^\d+$/.test(arg))) {
-            const [days, hours, minutes, seconds] = args.slice(-4).map(Number);
-            timeInMs = ((days * 86400) + (hours * 3600) + (minutes * 60) + seconds) * 1000;
-            baseArgs = args.slice(1, -4);
-        }
-
-        if (baseArgs.length < 3) {
-            return message.reply('Make sure to include a game name, code, and platform.');
-        }
+        const baseArgs = timeArgs === ['1', '0', '0', '0'] ? args : args.slice(0, -4);
 
         const platform = baseArgs[baseArgs.length - 1];
         const code = baseArgs[baseArgs.length - 2];
-        const gameName = baseArgs.slice(0, -2).join(' ');
+        const gameName = baseArgs.slice(1, baseArgs.length - 2).join(' ');
 
         const giveawayId = `${gameName}-${Date.now()}`;
 
@@ -124,10 +89,10 @@ client.on('messageCreate', async (message) => {
             platform,
             claimed: false,
             messageId: null,
-            channelId: message.channel.id,
+            timeout: null,
             createdAt: Date.now(),
             durationMs: timeInMs,
-            timeout: null
+            channelId: message.channel.id
         };
 
         const claimButton = new ButtonBuilder()
@@ -161,20 +126,20 @@ client.on('messageCreate', async (message) => {
                 } catch (err) {
                     console.error('Failed to notify host:', err);
                 }
-
                 delete giveaways[giveawayId];
                 saveGiveaways();
             }
         }, timeInMs);
 
-        saveGiveaways();
         await message.delete();
+        saveGiveaways();
     }
 
+    // !list - Shows active giveaways
     if (message.content.startsWith('!list')) {
         const activeGiveaways = Object.values(giveaways)
             .filter(giveaway => !giveaway.claimed)
-            .map(giveaway => `**${giveaway.gameName}** hosted by <@${giveaway.hostId}> [Platform: ${giveaway.platform}]`);
+            .map(giveaway => `**${giveaway.gameName}** hosted by ${giveaway.hostId} [Platform: ${giveaway.platform}]`);
 
         if (activeGiveaways.length === 0) {
             return message.reply('There are no active giveaways at the moment.');
@@ -203,7 +168,6 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// Button interaction handler
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
@@ -230,7 +194,7 @@ client.on('interactionCreate', async (interaction) => {
         const claimedEmbed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle(`Game Giveaway: ${giveaway.gameName}`)
-            .setDescription(`Hosted by: <@${giveaway.hostId}>\nPlatform: ${giveaway.platform}`)
+            .setDescription(`Hosted by: ${giveaway.hostId}\nPlatform: ${giveaway.platform}`)
             .addFields({
                 name: 'Claimed by:',
                 value: `${interaction.user.tag}`,
