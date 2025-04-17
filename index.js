@@ -40,10 +40,10 @@ client.on('messageCreate', async (message) => {
         let hasTimer = args.slice(-4).every(arg => /^\d+$/.test(arg)); // Check if last four args are numbers
         let timeArgs = hasTimer ? args.slice(-4) : ['1', '0', '0', '0']; // Default to 1 day if no valid timer
 
-        // Now, to find the correct position for the code and platform:
+        // Now, we will carefully split the game name, code, and platform
         let code, platform;
 
-        // We search for the first alphanumeric code and treat everything after that as the platform
+        // Find the first alphanumeric code (it can include numbers and letters)
         const codeIndex = args.findIndex(arg => /^[A-Za-z0-9]+$/.test(arg));
 
         if (codeIndex === -1) {
@@ -53,7 +53,7 @@ client.on('messageCreate', async (message) => {
         // The code is the element at codeIndex
         code = args[codeIndex];
 
-        // Platform is everything after the code
+        // The platform is everything after the code
         platform = args.slice(codeIndex + 1).join(' ');
 
         // The game name is everything before the code
