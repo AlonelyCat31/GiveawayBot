@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
 const giveaways = {};  // Object to store giveaways
@@ -46,7 +47,7 @@ client.on('messageCreate', async (message) => {
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle(`Game Giveaway: ${gameName}`)
-            .setDescription(`Hosted by: ${message.author.tag}\nPlatform: ${platform}\nGame Code: ${code}`)
+            .setDescription(`Hosted by: ${message.author.tag}\nPlatform: ${platform}`)
             .setFooter({ text: 'Click the button to claim the key!' });
 
         // Send the embed with the claim button
@@ -60,6 +61,9 @@ client.on('messageCreate', async (message) => {
             claimed: false,
             messageId: giveawayMessage.id
         };
+
+        // Delete the original command message
+        await message.delete();
     }
 
     // Command to show help
@@ -102,7 +106,7 @@ client.on('interactionCreate', async (interaction) => {
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle(`Game Giveaway: ${gameName}`)
-            .setDescription(`Hosted by: ${giveaway.host}\nPlatform: ${giveaway.platform}\nCode: ${giveaway.code}`)
+            .setDescription(`Hosted by: ${giveaway.host}\nPlatform: ${giveaway.platform}`)
             .addFields({
                 name: 'Claimed by:',
                 value: `${interaction.user.tag}`,
