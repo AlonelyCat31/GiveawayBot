@@ -1,7 +1,9 @@
-require("dotenv").config();
-const fs = require("fs");
-const path = require("path");
-const { Client, GatewayIntentBits, Partials, Events } = require("discord.js");
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { Client, GatewayIntentBits, Partials, Events } from 'discord.js';
+
+dotenv.config();
 
 const client = new Client({
   intents: [
@@ -19,7 +21,7 @@ const commands = new Map();
 // Load commands dynamically
 const commandFiles = fs.readdirSync(path.join(__dirname, "commands"));
 for (const file of commandFiles) {
-  const command = require(`./commands/${file}`);
+  const command = await import(`./commands/${file}`).then(module => module.default);
   commands.set(command.name, command.execute);
 }
 
@@ -47,7 +49,7 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
-const handleClaim = require("./interactions/claim.js");
+const handleClaim = await import("./interactions/claim.js").then(module => module.default);
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
