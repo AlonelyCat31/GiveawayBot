@@ -9,7 +9,7 @@ const {
 
 // Removed the token from config.json
 // const { token } = require('./config.json'); 
-const { keepAlive } = require('./keep_alive'); 
+const { keepAlive } = require('./keep_alive.js'); 
 
 const client = new Client({
     intents: [
