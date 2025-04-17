@@ -38,17 +38,17 @@ client.on('messageCreate', async (message) => {
             return message.reply('Usage: !host <game name> <code> <platform> [days hours minutes seconds]');
         }
 
-        // Check if the last 4 args are numbers (time values)
-        const timeArgs = args.slice(-4).every(arg => /^\d+$/.test(arg)) ? args.slice(-4) : ['1', '0', '0', '0']; // Default to 1 day if time is not provided
+        // Check if the last 4 arguments are valid numbers (time values)
+        let timeArgs = args.slice(-4).every(arg => /^\d+$/.test(arg)) ? args.slice(-4) : ['1', '0', '0', '0']; // Default to 1 day if time is not provided
+
+        // Extract the game name, code, and platform before handling time args
+        const platform = timeArgs === ['1', '0', '0', '0'] ? args[args.length - 1] : args[args.length - 2];
+        const code = timeArgs === ['1', '0', '0', '0'] ? args[args.length - 2] : args[args.length - 3];
+        const gameName = args.slice(1, args.length - (timeArgs === ['1', '0', '0', '0'] ? 3 : 4)).join(' ');
+
+        // Extract time values
         const [days, hours, minutes, seconds] = timeArgs.map(Number);
         const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
-
-        // If no time args are given, automatically assign the default values
-        const baseArgs = timeArgs === ['1', '0', '0', '0'] ? args.slice(0, -4) : args.slice(0, -4);
-
-        const platform = baseArgs[baseArgs.length - 1];
-        const code = baseArgs[baseArgs.length - 2];
-        const gameName = baseArgs.slice(1, baseArgs.length - 2).join(' ');
 
         const giveawayId = `${gameName}-${Date.now()}`;
 
