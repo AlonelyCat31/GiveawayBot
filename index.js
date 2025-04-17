@@ -25,8 +25,6 @@ client.once('ready', () => {
     console.log(`${client.user.tag} is now online!`);
 });
 
-// Auto-leave unauthorized servers
-
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -43,12 +41,11 @@ client.on('messageCreate', async (message) => {
         const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
 
         const baseArgs = timeArgs === ['1', '0', '0', '0'] ? args : args.slice(0, -4);
-
         const platform = baseArgs[baseArgs.length - 1];
         const code = baseArgs[baseArgs.length - 2];
         const gameName = baseArgs.slice(1, baseArgs.length - 2).join(' ');
 
-        const giveawayId = ${gameName}-${Date.now()};
+        const giveawayId = `${gameName}-${Date.now()}`;
 
         giveaways[giveawayId] = {
             host: message.author,
@@ -61,7 +58,7 @@ client.on('messageCreate', async (message) => {
         };
 
         const claimButton = new ButtonBuilder()
-            .setCustomId(claim_button_${giveawayId})
+            .setCustomId(`claim_button_${giveawayId}`)
             .setLabel('Claim Key')
             .setStyle(ButtonStyle.Success);
 
@@ -69,39 +66,43 @@ client.on('messageCreate', async (message) => {
 
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
-            .setTitle(Game Giveaway: ${gameName})
-            .setDescription(Hosted by: ${message.author.tag}\nPlatform: ${platform})
+            .setTitle(`Game Giveaway: ${gameName}`)
+            .setDescription(`Hosted by: ${message.author.tag}\nPlatform: ${platform}`)
             .setFooter({ text: 'Click the button to claim the key!' });
 
-        const giveawayMessage = await message.channel.send({ embeds: [embed], components: [row] });
+        try {
+            const giveawayMessage = await message.channel.send({ embeds: [embed], components: [row] });
+            giveaways[giveawayId].messageId = giveawayMessage.id;
 
-        giveaways[giveawayId].messageId = giveawayMessage.id;
+            giveaways[giveawayId].timeout = setTimeout(async () => {
+                if (!giveaways[giveawayId]?.claimed) {
+                    const expiredEmbed = new EmbedBuilder()
+                        .setColor(0xFF0000)
+                        .setTitle(`Game Giveaway: ${gameName}`)
+                        .setDescription(`${gameName}'s code has expired. No one claimed it in time.`);
 
-        giveaways[giveawayId].timeout = setTimeout(async () => {
-            if (!giveaways[giveawayId].claimed) {
-                const expiredEmbed = new EmbedBuilder()
-                    .setColor(0xFF0000)
-                    .setTitle(Game Giveaway: ${gameName})
-                    .setDescription(${gameName}'s code has expired. No one claimed it in time.);
-
-                try {
-                    await giveawayMessage.edit({ embeds: [expiredEmbed], components: [] });
-                    await giveaways[giveawayId].host.send(Your giveaway for **${gameName}** has expired. No one claimed the code.);
-                } catch (err) {
-                    console.error('Failed to notify host:', err);
+                    try {
+                        await giveawayMessage.edit({ embeds: [expiredEmbed], components: [] });
+                        await giveaways[giveawayId].host.send(`Your giveaway for **${gameName}** has expired. No one claimed the code.`);
+                    } catch (err) {
+                        console.error('Failed to notify host:', err);
+                    }
+                    delete giveaways[giveawayId];
                 }
-                delete giveaways[giveawayId];
-            }
-        }, timeInMs);
+            }, timeInMs);
 
-        await message.delete();
+            await message.delete();
+        } catch (err) {
+            console.error('Failed to send giveaway message:', err);
+            return message.reply('There was an error while hosting the giveaway.');
+        }
     }
 
     // !list - Shows active giveaways
     if (message.content.startsWith('!list')) {
         const activeGiveaways = Object.values(giveaways)
             .filter(giveaway => !giveaway.claimed)
-            .map(giveaway => **${giveaway.gameName}** hosted by ${giveaway.host.tag} [Platform: ${giveaway.platform}]);
+            .map(g => `**${g.gameName}** hosted by ${g.host.tag} [Platform: ${g.platform}]`);
 
         if (activeGiveaways.length === 0) {
             return message.reply('There are no active giveaways at the moment.');
@@ -115,6 +116,7 @@ client.on('messageCreate', async (message) => {
         await message.reply({ embeds: [embed] });
     }
 
+    // !help - Shows command list
     if (message.content.startsWith('!help')) {
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
@@ -148,18 +150,20 @@ client.on('interactionCreate', async (interaction) => {
         clearTimeout(giveaway.timeout);
 
         try {
-            await interaction.user.send(🎉 You've claimed **${giveaway.gameName}** on **${giveaway.platform}**!\nHere’s your key: **${giveaway.code}**);
+            await interaction.user.send(`🎉 You've claimed **${giveaway.gameName}** on **${giveaway.platform}**!\nHere’s your key: **${giveaway.code}**`);
         } catch (err) {
             console.error('Failed to send DM:', err);
+            await interaction.reply({ content: "I couldn't send you a DM. Please check your privacy settings.", ephemeral: true });
+            return;
         }
 
         const claimedEmbed = new EmbedBuilder()
             .setColor(0x0099FF)
-            .setTitle(Game Giveaway: ${giveaway.gameName})
-            .setDescription(Hosted by: ${giveaway.host.tag}\nPlatform: ${giveaway.platform})
+            .setTitle(`Game Giveaway: ${giveaway.gameName}`)
+            .setDescription(`Hosted by: ${giveaway.host.tag}\nPlatform: ${giveaway.platform}`)
             .addFields({
                 name: 'Claimed by:',
-                value: ${interaction.user.tag},
+                value: `${interaction.user.tag}`,
                 inline: true
             })
             .setFooter({ text: 'The giveaway has ended!' });
