@@ -54,3 +54,16 @@ module.exports = async function handleClaim(interaction, gameCodes) {
     });
   }
 };
+
+// Logging
+try {
+  const logData = JSON.parse(fs.readFileSync(path.join(__dirname, "../logChannel.json")));
+  const logChannel = await interaction.guild.channels.fetch(logData.channelId);
+  if (logChannel) {
+    logChannel.send(
+      `✅ **${gameName}** code claimed by ${interaction.user} (hosted by **${host}**)`
+    );
+  }
+} catch (err) {
+  console.error("Log channel not set or not found:", err);
+}
