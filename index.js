@@ -4,7 +4,11 @@ const fs = require('fs');
 const path = require('path');
 
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent // ✅ Required to read message content
+    ]
 });
 
 client.commands = new Map();
@@ -20,24 +24,8 @@ for (const file of commandFiles) {
     commands[command.name] = { description: command.description }; // Store command descriptions
 }
 
+console.log('Loaded commands:', [...client.commands.keys()]); // ✅ Confirm commands are loaded
+
 // Event: When the bot is ready
 client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
-});
-
-// Event: When a message is received
-client.on('messageCreate', message => {
-    if (!message.content.startsWith('!') || message.author.bot) return;
-
-    const args = message.content.slice(1).trim().split(/ +/);
-    const commandName = args.shift().toLowerCase();
-
-    const command = client.commands.get(commandName);
-
-    if (command) {
-        command.execute(message, commands); // Pass the commands object to the command
-    }
-});
-
-// Log in to Discord using the token from the environment variable
-client.login(process.env.token);
+    console.log(`✅ Logged in as ${client.user
