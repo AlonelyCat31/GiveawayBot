@@ -1,25 +1,38 @@
 const fs = require('fs');
 const path = require('path');
 
-const filePath = path.join(__dirname, 'giveaways.json');
+const giveawaysFilePath = path.join(__dirname, 'giveaways.json');
 
-// Load giveaways from the file
+// Load giveaways from the JSON file
 function loadGiveaways() {
     try {
-        if (fs.existsSync(filePath)) {
-            const data = fs.readFileSync(filePath, 'utf8');
-            return JSON.parse(data);
+        const data = fs.readFileSync(giveawaysFilePath, 'utf8');
+        const giveaways = JSON.parse(data);
+        
+        // Clean the giveaways by removing the timeout and other non-serializable properties
+        for (const giveawayId in giveaways) {
+            delete giveaways[giveawayId].timeout;
         }
+        
+        return giveaways;
     } catch (err) {
         console.error('Error loading giveaways:', err);
+        return {};
     }
-    return {}; // Return an empty object if file doesn't exist or can't be read
 }
 
-// Save giveaways to the file
+// Save giveaways to the JSON file
 function saveGiveaways(giveaways) {
     try {
-        fs.writeFileSync(filePath, JSON.stringify(giveaways, null, 2), 'utf8');
+        // Create a copy of the giveaways object and remove the timeout property from each giveaway
+        const sanitizedGiveaways = {};
+        for (const [giveawayId, giveaway] of Object.entries(giveaways)) {
+            sanitizedGiveaways[giveawayId] = { ...giveaway };
+            delete sanitizedGiveaways[giveawayId].timeout; // Remove the timeout before saving
+        }
+        
+        // Write the sanitized giveaways to the file
+        fs.writeFileSync(giveawaysFilePath, JSON.stringify(sanitizedGiveaways, null, 2), 'utf8');
     } catch (err) {
         console.error('Error saving giveaways:', err);
     }
