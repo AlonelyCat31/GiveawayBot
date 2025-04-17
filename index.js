@@ -7,6 +7,9 @@ const {
     ActionRowBuilder
 } = require('discord.js');
 
+// Removed the token from config.json
+// const { token } = require('./config.json'); 
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -104,6 +107,24 @@ client.on('messageCreate', async (message) => {
         await message.delete();
     }
 
+    // !list - Shows active giveaways
+    if (message.content.startsWith('!list')) {
+        const activeGiveaways = Object.values(giveaways)
+            .filter(giveaway => !giveaway.claimed)
+            .map(giveaway => `**${giveaway.gameName}** hosted by ${giveaway.host.tag} [Platform: ${giveaway.platform}]`);
+
+        if (activeGiveaways.length === 0) {
+            return message.reply('There are no active giveaways at the moment.');
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle('Active Giveaways')
+            .setDescription(activeGiveaways.join('\n'));
+
+        await message.reply({ embeds: [embed] });
+    }
+
     if (message.content.startsWith('!help')) {
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
@@ -111,7 +132,8 @@ client.on('messageCreate', async (message) => {
             .setDescription('Here are the available commands for this bot:')
             .addFields(
                 { name: '!help', value: 'Displays this help message.' },
-                { name: '!host <game name> <code> <platform> [days hours minutes seconds]', value: 'Host a giveaway. Time is optional (defaults to 1 day).' }
+                { name: '!host <game name> <code> <platform> [days hours minutes seconds]', value: 'Host a giveaway. Time is optional (defaults to 1 day).' },
+                { name: '!list', value: 'Shows a list of all active giveaways.' }
             );
 
         await message.reply({ embeds: [embed] });
