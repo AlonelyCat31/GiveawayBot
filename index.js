@@ -26,17 +26,6 @@ client.once('ready', () => {
 });
 
 // Auto-leave unauthorized servers
-client.on('guildCreate', async (guild) => {
-    const owner = await guild.fetchOwner();
-    const allowedOwnerId = '1276654206421307402';
-
-    if (owner.id !== allowedOwnerId) {
-        await guild.leave();
-        console.log(`Left unauthorized server: ${guild.name} (not invited by the owner)`);
-    } else {
-        console.log(`Joined authorized server: ${guild.name}`);
-    }
-});
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
