@@ -1,6 +1,5 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 
-
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
 const giveaways = {};  // Object to store giveaways
@@ -94,13 +93,20 @@ client.on('interactionCreate', async (interaction) => {
     const giveaway = giveaways[gameName];
 
     if (giveaway.claimed) {
-        await interaction.reply({ content: 'This key has already been claimed!', ephemeral: true });
+        // If the key has already been claimed, inform the user
+        if (!interaction.replied) {
+            await interaction.reply({ content: 'This key has already been claimed!', ephemeral: true });
+        }
     } else {
-        // Mark as claimed
+        // Mark the giveaway as claimed
         giveaway.claimed = true;
 
-        // Send the claimed key to the user via DM
-        await interaction.user.send(`Congratulations! You've claimed the key for **${gameName}** (${giveaway.platform}): **${giveaway.code}**`);
+        // Send the game code to the user via DM
+        try {
+            await interaction.user.send(`Congratulations! You've claimed the key for **${gameName}** (${giveaway.platform}): **${giveaway.code}**`);
+        } catch (error) {
+            console.error('Could not send DM to user:', error);
+        }
 
         // Update the giveaway message to show who claimed it
         const embed = new EmbedBuilder()
@@ -114,8 +120,13 @@ client.on('interactionCreate', async (interaction) => {
             })
             .setFooter({ text: 'The giveaway has ended!' });
 
+        // Use update() to modify the original message
         await interaction.update({ embeds: [embed], components: [] });
-        await interaction.reply({ content: `You have successfully claimed the key for **${gameName}**!`, ephemeral: true });
+
+        // Optionally, send a confirmation message to the user
+        if (!interaction.replied) {
+            await interaction.followUp({ content: `You have successfully claimed the key for **${gameName}**!`, ephemeral: true });
+        }
     }
 });
 
