@@ -1,3 +1,4 @@
+require('dotenv').config();
 const {
     Client,
     GatewayIntentBits,
@@ -12,6 +13,7 @@ const { keepAlive } = require('./keep_alive.js');
 
 const DATA_FILE = path.join(__dirname, 'giveaways.json');
 
+// Function to load giveaways from the JSON file
 function loadGiveaways() {
     if (fs.existsSync(DATA_FILE)) {
         try {
@@ -23,11 +25,12 @@ function loadGiveaways() {
     return {};
 }
 
+// Function to save giveaways back to the JSON file
 function saveGiveaways() {
     fs.writeFileSync(DATA_FILE, JSON.stringify(giveaways, null, 2));
 }
 
-const giveaways = loadGiveaways();
+const giveaways = loadGiveaways(); // Load active giveaways on startup
 
 const client = new Client({
     intents: [
@@ -39,8 +42,52 @@ const client = new Client({
 
 client.once('ready', () => {
     console.log(`${client.user.tag} is now online!`);
+
+    // Restore giveaways and reset their timeouts if necessary
+    for (const [giveawayId, giveaway] of Object.entries(giveaways)) {
+        if (!giveaway.claimed) {
+            const timeLeft = giveaway.durationMs - (Date.now() - giveaway.createdAt);
+            if (timeLeft > 0) {
+                giveaway.timeout = setTimeout(async () => {
+                    // Expire the giveaway after time has passed
+                    const giveawayMessage = await client.channels.cache.get(giveaway.channelId)?.messages.fetch(giveaway.messageId);
+                    if (giveawayMessage) {
+                        const expiredEmbed = new EmbedBuilder()
+                            .setColor(0xFF0000)
+                            .setTitle(`Game Giveaway: ${giveaway.gameName}`)
+                            .setDescription(`${giveaway.gameName}'s code has expired. No one claimed it in time.`);
+
+                        await giveawayMessage.edit({ embeds: [expiredEmbed], components: [] });
+                    }
+
+                    // Notify the host and delete the giveaway from memory
+                    try {
+                        const host = await client.users.fetch(giveaway.hostId);
+                        await host.send(`Your giveaway for **${giveaway.gameName}** has expired. No one claimed the code.`);
+                    } catch (err) {
+                        console.error('Failed to notify host:', err);
+                    }
+
+                    delete giveaways[giveawayId];
+                    saveGiveaways();
+                }, timeLeft);
+            } else {
+                // If the giveaway already expired, notify the host and remove it
+                try {
+                    const host = await client.users.fetch(giveaway.hostId);
+                    await host.send(`Your giveaway for **${giveaway.gameName}** has expired. No one claimed the code.`);
+                } catch (err) {
+                    console.error('Failed to notify host:', err);
+                }
+
+                delete giveaways[giveawayId];
+                saveGiveaways();
+            }
+        }
+    }
 });
 
+// Command to host a giveaway
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -156,6 +203,7 @@ client.on('messageCreate', async (message) => {
     }
 });
 
+// Button interaction handler
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
