@@ -16,13 +16,18 @@ client.on('messageCreate', async (message) => {
     if (message.content.startsWith('!host')) {
         const args = message.content.split(' ');
 
-        // Check if the right number of arguments are provided
+        // Make sure there are at least 4 parts (command, game name, code, platform)
         if (args.length < 4) {
             return message.reply('Usage: !host <game name> <code> <platform>');
         }
 
-        const [command, gameName, code, platform] = args;
+        // Get the platform (last element) and the code (second to last)
+        const platform = args[args.length - 1];
+        const code = args[args.length - 2];
         
+        // Everything before the last two arguments is the game name
+        const gameName = args.slice(1, args.length - 2).join(' ');
+
         // Check if the giveaway already exists
         if (giveaways[gameName] && giveaways[gameName].claimed) {
             return message.reply(`The giveaway for ${gameName} has already been claimed!`);
