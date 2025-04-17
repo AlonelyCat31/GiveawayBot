@@ -28,3 +28,15 @@ module.exports = {
     return message.channel.send({ embeds: [embed], components: [row] });
   },
 };
+
+// Logging
+try {
+  const logData = JSON.parse(fs.readFileSync(path.join(__dirname, "../logChannel.json")));
+  const logChannel = await message.guild.channels.fetch(logData.channelId);
+  if (logChannel) {
+    logChannel.send(`🟢 **${gameName}** code hosted by ${message.author}`);
+  }
+} catch (err) {
+  console.error("Log channel not set or not found:", err);
+}
+
