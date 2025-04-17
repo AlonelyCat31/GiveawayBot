@@ -1,5 +1,12 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
-const { saveGiveaways, loadGiveaways } = require('./giveawayManager.js');
+const {
+    Client,
+    GatewayIntentBits,
+    EmbedBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ActionRowBuilder
+} = require('discord.js');
+const { saveGiveaways, loadGiveaways } = require('./giveawayManager.js');  // Assuming you've created the giveaway manager
 
 const client = new Client({
     intents: [
@@ -16,6 +23,7 @@ client.once('ready', () => {
 });
 
 // Auto-leave unauthorized servers
+
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
