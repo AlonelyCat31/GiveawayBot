@@ -44,10 +44,11 @@ client.on('messageCreate', async (message) => {
         let platform = hasTimer ? args.slice(-5).join(' ') : args.slice(-1).join(' ');
         let code = hasTimer ? args[args.length - 6] : args[args.length - 2];
 
-        // The rest is the game name
+        // The rest is the game name (everything before the code)
         let gameNameEndIndex = hasTimer ? args.length - 6 : args.length - 2;
         let gameName = args.slice(1, gameNameEndIndex).join(' ');
 
+        // Ensure we get the correct values for the time in milliseconds
         const [days, hours, minutes, seconds] = timeArgs.map(Number);
         const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
 
