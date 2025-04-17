@@ -1,122 +1,150 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+const {
+    Client,
+    GatewayIntentBits,
+    EmbedBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ActionRowBuilder
+} = require('discord.js');
 
-const giveaways = {};  // Object to store giveaways
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
+});
+
+const giveaways = {};
 
 client.once('ready', () => {
     console.log(`${client.user.tag} is now online!`);
 });
 
+// Auto-leave unauthorized servers
+client.on('guildCreate', async (guild) => {
+    const owner = await guild.fetchOwner();
+    const allowedOwnerId = '1276654206421307402';
+
+    if (owner.id !== allowedOwnerId) {
+        await guild.leave();
+        console.log(`Left unauthorized server: ${guild.name} (not invited by the owner)`);
+    } else {
+        console.log(`Joined authorized server: ${guild.name}`);
+    }
+});
+
 client.on('messageCreate', async (message) => {
-    // Ignore messages from bots
     if (message.author.bot) return;
 
-    // Command to host a giveaway
+    // !host <game name> <code> <platform> [days hours minutes seconds]
     if (message.content.startsWith('!host')) {
-        const args = message.content.split(' ');
+        const args = message.content.trim().split(/\s+/);
 
-        // Make sure there are at least 4 parts (command, game name, code, platform)
         if (args.length < 4) {
-            return message.reply('Usage: !host <game name> <code> <platform>');
+            return message.reply('Usage: !host <game name> <code> <platform> [days hours minutes seconds]');
         }
 
-        // Get the platform (last element) and the code (second to last)
-        const platform = args[args.length - 1];
-        const code = args[args.length - 2];
-        
-        // Everything before the last two arguments is the game name
-        const gameName = args.slice(1, args.length - 2).join(' ');
+        const timeArgs = args.slice(-4).every(arg => /^\d+$/.test(arg)) ? args.slice(-4) : ['1', '0', '0', '0'];
+        const [days, hours, minutes, seconds] = timeArgs.map(Number);
+        const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
 
-        // Generate a unique ID for this giveaway (could be based on the current timestamp)
+        const baseArgs = timeArgs === ['1', '0', '0', '0'] ? args : args.slice(0, -4);
+
+        const platform = baseArgs[baseArgs.length - 1];
+        const code = baseArgs[baseArgs.length - 2];
+        const gameName = baseArgs.slice(1, baseArgs.length - 2).join(' ');
+
         const giveawayId = `${gameName}-${Date.now()}`;
 
-        // Check if the giveaway already exists for this unique giveaway ID
-        if (!giveaways[giveawayId]) {
-            giveaways[giveawayId] = {
-                host: message.author.tag,
-                gameName: gameName,
-                code: code,
-                platform: platform,
-                claimed: false,
-                messageId: null
-            };
-        }
+        giveaways[giveawayId] = {
+            host: message.author,
+            gameName,
+            code,
+            platform,
+            claimed: false,
+            messageId: null,
+            timeout: null
+        };
 
-        // Create a button for claiming the game key
         const claimButton = new ButtonBuilder()
             .setCustomId(`claim_button_${giveawayId}`)
             .setLabel('Claim Key')
             .setStyle(ButtonStyle.Success);
 
-        // Create an ActionRow to hold the button
         const row = new ActionRowBuilder().addComponents(claimButton);
 
-        // Create an embed for the giveaway message
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle(`Game Giveaway: ${gameName}`)
             .setDescription(`Hosted by: ${message.author.tag}\nPlatform: ${platform}`)
             .setFooter({ text: 'Click the button to claim the key!' });
 
-        // Send the embed with the claim button
         const giveawayMessage = await message.channel.send({ embeds: [embed], components: [row] });
 
-        // Store giveaway details in the `giveaways` object, including the message ID
         giveaways[giveawayId].messageId = giveawayMessage.id;
 
-        // Delete the original command message
+        giveaways[giveawayId].timeout = setTimeout(async () => {
+            if (!giveaways[giveawayId].claimed) {
+                const expiredEmbed = new EmbedBuilder()
+                    .setColor(0xFF0000)
+                    .setTitle(`Game Giveaway: ${gameName}`)
+                    .setDescription(`${gameName}'s code has expired. No one claimed it in time.`);
+
+                try {
+                    await giveawayMessage.edit({ embeds: [expiredEmbed], components: [] });
+                    await giveaways[giveawayId].host.send(`Your giveaway for **${gameName}** has expired. No one claimed the code.`);
+                } catch (err) {
+                    console.error('Failed to notify host:', err);
+                }
+                delete giveaways[giveawayId];
+            }
+        }, timeInMs);
+
         await message.delete();
     }
 
-    // Command to show help
     if (message.content.startsWith('!help')) {
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle('Available Commands')
             .setDescription('Here are the available commands for this bot:')
             .addFields(
-                { name: '!help', value: 'Displays this help message with available commands.' },
-                { name: '!host <game name> <code> <platform>', value: 'Host a giveaway for a game key. Example: `!host Fortnite 12345 PC`' },
-                { name: '!claim', value: 'Claim a key (button interaction only, shown when available).' }
-            )
-            .setFooter({ text: 'For more information, type !help.' });
+                { name: '!help', value: 'Displays this help message.' },
+                { name: '!host <game name> <code> <platform> [days hours minutes seconds]', value: 'Host a giveaway. Time is optional (defaults to 1 day).' }
+            );
 
         await message.reply({ embeds: [embed] });
     }
 });
 
-// Interaction listener for the claim button
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
-    // Get the giveaway ID from the button custom ID
-    const giveawayId = interaction.customId.split('_').slice(2).join('_');  // Extract the unique giveaway ID from the button ID
+    const giveawayId = interaction.customId.split('_').slice(2).join('_');
 
     if (!giveaways[giveawayId]) return;
 
     const giveaway = giveaways[giveawayId];
 
     if (giveaway.claimed) {
-        // If the key has already been claimed, inform the user
         if (!interaction.replied) {
             await interaction.reply({ content: 'This key has already been claimed!', ephemeral: true });
         }
     } else {
-        // Mark the giveaway as claimed
         giveaway.claimed = true;
+        clearTimeout(giveaway.timeout);
 
-        // Send the game code to the user via DM
         try {
-            await interaction.user.send(`Congratulations! You've claimed the key for **${giveaway.gameName}** (${giveaway.platform}): **${giveaway.code}**`);
-        } catch (error) {
-            console.error('Could not send DM to user:', error);
+            await interaction.user.send(`🎉 You've claimed **${giveaway.gameName}** on **${giveaway.platform}**!\nHere’s your key: **${giveaway.code}**`);
+        } catch (err) {
+            console.error('Failed to send DM:', err);
         }
 
-        // Update the giveaway message to show who claimed it
-        const embed = new EmbedBuilder()
+        const claimedEmbed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle(`Game Giveaway: ${giveaway.gameName}`)
-            .setDescription(`Hosted by: ${giveaway.host}\nPlatform: ${giveaway.platform}`)
+            .setDescription(`Hosted by: ${giveaway.host.tag}\nPlatform: ${giveaway.platform}`)
             .addFields({
                 name: 'Claimed by:',
                 value: `${interaction.user.tag}`,
@@ -124,15 +152,14 @@ client.on('interactionCreate', async (interaction) => {
             })
             .setFooter({ text: 'The giveaway has ended!' });
 
-        // Use update() to modify the original message
-        await interaction.update({ embeds: [embed], components: [] });
+        await interaction.update({ embeds: [claimedEmbed], components: [] });
 
-        // Optionally, send a confirmation message to the user
         if (!interaction.replied) {
-            await interaction.followUp({ content: `You have successfully claimed the key for **${giveaway.gameName}**!`, ephemeral: true });
+            await interaction.followUp({ content: 'You have successfully claimed the key!', ephemeral: true });
         }
+
+        delete giveaways[giveawayId];
     }
 });
 
-// Log the bot in
 client.login(process.env.token);
