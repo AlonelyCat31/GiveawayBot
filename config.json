@@ -1,0 +1,8 @@
+{
+  "claimedDropChannelId": "YOUR_CLAIM_DROP_CHANNEL_ID",
+  "dropDelay": {
+    "hours": 0,
+    "minutes": 0,
+    "seconds": 30
+  }
+}
