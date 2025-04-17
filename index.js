@@ -25,8 +25,6 @@ client.once('ready', () => {
     console.log(`${client.user.tag} is now online!`);
 });
 
-// Auto-leave unauthorized servers
-
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -38,15 +36,15 @@ client.on('messageCreate', async (message) => {
             return message.reply('Usage: !host <game name> <code> <platform> [days hours minutes seconds]');
         }
 
-        // Check if the last 4 arguments are valid numbers (time values)
-        let timeArgs = args.slice(-4).every(arg => /^\d+$/.test(arg)) ? args.slice(-4) : ['1', '0', '0', '0']; // Default to 1 day if time is not provided
+        // Detect timer args
+        let hasTimer = args.slice(-4).every(arg => /^\d+$/.test(arg));
+        let timeArgs = hasTimer ? args.slice(-4) : ['1', '0', '0', '0'];
 
-        // Extract the game name, code, and platform before handling time args
-        const platform = timeArgs === ['1', '0', '0', '0'] ? args[args.length - 1] : args[args.length - 2];
-        const code = timeArgs === ['1', '0', '0', '0'] ? args[args.length - 2] : args[args.length - 3];
-        const gameName = args.slice(1, args.length - (timeArgs === ['1', '0', '0', '0'] ? 3 : 4)).join(' ');
+        let platform = hasTimer ? args[args.length - 5] : args[args.length - 1];
+        let code = hasTimer ? args[args.length - 6] : args[args.length - 2];
+        let gameNameEndIndex = hasTimer ? args.length - 6 : args.length - 2;
+        let gameName = args.slice(1, gameNameEndIndex).join(' ');
 
-        // Extract time values
         const [days, hours, minutes, seconds] = timeArgs.map(Number);
         const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
 
@@ -99,7 +97,6 @@ client.on('messageCreate', async (message) => {
         await message.delete();
     }
 
-    // !list - Shows active giveaways
     if (message.content.startsWith('!list')) {
         const activeGiveaways = Object.values(giveaways)
             .filter(giveaway => !giveaway.claimed)
