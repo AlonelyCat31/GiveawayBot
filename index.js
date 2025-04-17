@@ -22,8 +22,10 @@ const client = new Client({
 const giveaways = {};
 
 client.once('ready', () => {
-    console.log(`${client.user.tag} is now online!`);
+    console.log(${client.user.tag} is now online!);
 });
+
+// Auto-leave unauthorized servers
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
@@ -36,34 +38,17 @@ client.on('messageCreate', async (message) => {
             return message.reply('Usage: !host <game name> <code> <platform> [days hours minutes seconds]');
         }
 
-        // Detect timer arguments (last four args)
-        let hasTimer = args.slice(-4).every(arg => /^\d+$/.test(arg)); // Check if last four args are numbers
-        let timeArgs = hasTimer ? args.slice(-4) : ['1', '0', '0', '0']; // Default to 1 day if no valid timer
-
-        // Now, we will carefully split the game name, code, and platform
-        let code, platform;
-
-        // Find the first alphanumeric code (it can include numbers and letters)
-        const codeIndex = args.findIndex(arg => /^[A-Za-z0-9]+$/.test(arg));
-
-        if (codeIndex === -1) {
-            return message.reply('No valid code found!');
-        }
-
-        // The code is the element at codeIndex
-        code = args[codeIndex];
-
-        // The platform is everything after the code
-        platform = args.slice(codeIndex + 1).join(' ');
-
-        // The game name is everything before the code
-        let gameName = args.slice(1, codeIndex).join(' ');
-
-        // Ensure we get the correct values for the time in milliseconds
+        const timeArgs = args.slice(-4).every(arg => /^\d+$/.test(arg)) ? args.slice(-4) : ['1', '0', '0', '0'];
         const [days, hours, minutes, seconds] = timeArgs.map(Number);
         const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
 
-        const giveawayId = `${gameName}-${Date.now()}`;
+        const baseArgs = timeArgs === ['1', '0', '0', '0'] ? args : args.slice(0, -4);
+
+        const platform = baseArgs[baseArgs.length - 1];
+        const code = baseArgs[baseArgs.length - 2];
+        const gameName = baseArgs.slice(1, baseArgs.length - 2).join(' ');
+
+        const giveawayId = ${gameName}-${Date.now()};
 
         giveaways[giveawayId] = {
             host: message.author,
@@ -76,7 +61,7 @@ client.on('messageCreate', async (message) => {
         };
 
         const claimButton = new ButtonBuilder()
-            .setCustomId(`claim_button_${giveawayId}`)
+            .setCustomId(claim_button_${giveawayId})
             .setLabel('Claim Key')
             .setStyle(ButtonStyle.Success);
 
@@ -84,8 +69,8 @@ client.on('messageCreate', async (message) => {
 
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
-            .setTitle(`Game Giveaway: ${gameName}`)
-            .setDescription(`Hosted by: ${message.author.tag}\nPlatform: ${platform}`)
+            .setTitle(Game Giveaway: ${gameName})
+            .setDescription(Hosted by: ${message.author.tag}\nPlatform: ${platform})
             .setFooter({ text: 'Click the button to claim the key!' });
 
         const giveawayMessage = await message.channel.send({ embeds: [embed], components: [row] });
@@ -96,12 +81,12 @@ client.on('messageCreate', async (message) => {
             if (!giveaways[giveawayId].claimed) {
                 const expiredEmbed = new EmbedBuilder()
                     .setColor(0xFF0000)
-                    .setTitle(`Game Giveaway: ${gameName}`)
-                    .setDescription(`${gameName}'s code has expired. No one claimed it in time.`);
+                    .setTitle(Game Giveaway: ${gameName})
+                    .setDescription(${gameName}'s code has expired. No one claimed it in time.);
 
                 try {
                     await giveawayMessage.edit({ embeds: [expiredEmbed], components: [] });
-                    await giveaways[giveawayId].host.send(`Your giveaway for **${gameName}** has expired. No one claimed the code.`);
+                    await giveaways[giveawayId].host.send(Your giveaway for **${gameName}** has expired. No one claimed the code.);
                 } catch (err) {
                     console.error('Failed to notify host:', err);
                 }
@@ -112,10 +97,11 @@ client.on('messageCreate', async (message) => {
         await message.delete();
     }
 
+    // !list - Shows active giveaways
     if (message.content.startsWith('!list')) {
         const activeGiveaways = Object.values(giveaways)
             .filter(giveaway => !giveaway.claimed)
-            .map(giveaway => `**${giveaway.gameName}** hosted by ${giveaway.host.tag} [Platform: ${giveaway.platform}]`);
+            .map(giveaway => **${giveaway.gameName}** hosted by ${giveaway.host.tag} [Platform: ${giveaway.platform}]);
 
         if (activeGiveaways.length === 0) {
             return message.reply('There are no active giveaways at the moment.');
@@ -162,18 +148,18 @@ client.on('interactionCreate', async (interaction) => {
         clearTimeout(giveaway.timeout);
 
         try {
-            await interaction.user.send(`🎉 You've claimed **${giveaway.gameName}** on **${giveaway.platform}**!\nHere’s your key: **${giveaway.code}**`);
+            await interaction.user.send(🎉 You've claimed **${giveaway.gameName}** on **${giveaway.platform}**!\nHere’s your key: **${giveaway.code}**);
         } catch (err) {
             console.error('Failed to send DM:', err);
         }
 
         const claimedEmbed = new EmbedBuilder()
             .setColor(0x0099FF)
-            .setTitle(`Game Giveaway: ${giveaway.gameName}`)
-            .setDescription(`Hosted by: ${giveaway.host.tag}\nPlatform: ${giveaway.platform}`)
+            .setTitle(Game Giveaway: ${giveaway.gameName})
+            .setDescription(Hosted by: ${giveaway.host.tag}\nPlatform: ${giveaway.platform})
             .addFields({
                 name: 'Claimed by:',
-                value: `${interaction.user.tag}`,
+                value: ${interaction.user.tag},
                 inline: true
             })
             .setFooter({ text: 'The giveaway has ended!' });
