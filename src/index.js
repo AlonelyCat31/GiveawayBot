@@ -1,5 +1,5 @@
 const { Client, Intents } = require('discord.js');
-require('dotenv').config(); // Load environment variables
+const config = require('./config'); // Import the config file
 const fs = require('fs');
 const path = require('path');
 
@@ -20,7 +20,8 @@ for (const file of commandFiles) {
 
 // Event: When the bot is ready
 client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
+    console.log(`Logged in as ${client.user.tag}!`); // Log the bot's username
+    console.log('The bot is online and ready to receive commands!'); // Additional message
 });
 
 // Event: When a message is received
@@ -37,5 +38,5 @@ client.on('messageCreate', message => {
     }
 });
 
-// Log in to Discord using the token from the environment variable
-client.login(process.env.token);
+// Log in to Discord using the token from the config file
+client.login(config.token);
