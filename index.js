@@ -1,5 +1,4 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
-const { keepAlive } = require('./keep_alive.js');
 const { saveGiveaways, loadGiveaways } = require('./giveawayManager.js');
 
 const client = new Client({
@@ -10,55 +9,13 @@ const client = new Client({
     ]
 });
 
-const giveaways = loadGiveaways(); // Load active giveaways from the file
+const giveaways = loadGiveaways();
 
-client.once('ready', async () => {
+client.once('ready', () => {
     console.log(`${client.user.tag} is now online!`);
-
-    // Restore giveaways and reset their timeouts if necessary
-    for (const [giveawayId, giveaway] of Object.entries(giveaways)) {
-        if (!giveaway.claimed) {
-            const timeLeft = giveaway.durationMs - (Date.now() - giveaway.createdAt);
-            if (timeLeft > 0) {
-                giveaway.timeout = setTimeout(async () => {
-                    // Expire the giveaway after time has passed
-                    const giveawayMessage = await client.channels.cache.get(giveaway.channelId)?.messages.fetch(giveaway.messageId);
-                    if (giveawayMessage) {
-                        const expiredEmbed = new EmbedBuilder()
-                            .setColor(0xFF0000)
-                            .setTitle(`Game Giveaway: ${giveaway.gameName}`)
-                            .setDescription(`${giveaway.gameName}'s code has expired. No one claimed it in time.`);
-
-                        await giveawayMessage.edit({ embeds: [expiredEmbed], components: [] });
-                    }
-
-                    // Notify the host and delete the giveaway from memory
-                    try {
-                        const host = await client.users.fetch(giveaway.hostId); // Ensure async here
-                        await host.send(`Your giveaway for **${giveaway.gameName}** has expired. No one claimed the code.`);
-                    } catch (err) {
-                        console.error('Failed to notify host:', err);
-                    }
-
-                    delete giveaways[giveawayId];
-                    saveGiveaways();
-                }, timeLeft);
-            } else {
-                // If the giveaway already expired, notify the host and remove it
-                try {
-                    const host = await client.users.fetch(giveaway.hostId); // Ensure async here
-                    await host.send(`Your giveaway for **${giveaway.gameName}** has expired. No one claimed the code.`);
-                } catch (err) {
-                    console.error('Failed to notify host:', err);
-                }
-
-                delete giveaways[giveawayId];
-                saveGiveaways();
-            }
-        }
-    }
 });
 
+// Auto-leave unauthorized servers
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -70,7 +27,12 @@ client.on('messageCreate', async (message) => {
             return message.reply('Usage: !host <game name> <code> <platform> [days hours minutes seconds]');
         }
 
-        const timeArgs = args.slice(-4).every(arg => /^\d+$/.test(arg)) ? args.slice(-4) : ['1', '0', '0', '0'];
+        let timeArgs = args.slice(-4); // Get the last 4 arguments to check if they are timer values
+        // If timer values are not valid, set defaults to 1 day, 0 hours, 0 minutes, 0 seconds
+        if (timeArgs.length !== 4 || !timeArgs.every(arg => /^\d+$/.test(arg))) {
+            timeArgs = ['1', '0', '0', '0']; // Default to 1 day
+        }
+
         const [days, hours, minutes, seconds] = timeArgs.map(Number);
         const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
 
@@ -105,7 +67,7 @@ client.on('messageCreate', async (message) => {
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle(`Game Giveaway: ${gameName}`)
-            .setDescription(`Hosted by: ${message.author.tag}\nPlatform: ${platform}`)
+            .setDescription(`Hosted by: ${message.author.username}#${message.author.discriminator}\nPlatform: ${platform}`)
             .setFooter({ text: 'Click the button to claim the key!' });
 
         const giveawayMessage = await message.channel.send({ embeds: [embed], components: [row] });
@@ -127,19 +89,24 @@ client.on('messageCreate', async (message) => {
                     console.error('Failed to notify host:', err);
                 }
                 delete giveaways[giveawayId];
-                saveGiveaways();
+                saveGiveaways(giveaways);
             }
         }, timeInMs);
 
         await message.delete();
-        saveGiveaways();
+        saveGiveaways(giveaways);
     }
 
     // !list - Shows active giveaways
     if (message.content.startsWith('!list')) {
-        const activeGiveaways = Object.values(giveaways)
-            .filter(giveaway => !giveaway.claimed)
-            .map(giveaway => `**${giveaway.gameName}** hosted by ${giveaway.hostId} [Platform: ${giveaway.platform}]`);
+        const activeGiveaways = [];
+
+        for (const giveaway of Object.values(giveaways)) {
+            if (!giveaway.claimed) {
+                const host = await client.users.fetch(giveaway.hostId); // Fetch host info
+                activeGiveaways.push(`**${giveaway.gameName}** hosted by ${host.username}#${host.discriminator} [Platform: ${giveaway.platform}]`);
+            }
+        }
 
         if (activeGiveaways.length === 0) {
             return message.reply('There are no active giveaways at the moment.');
@@ -209,7 +176,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         delete giveaways[giveawayId];
-        saveGiveaways();
+        saveGiveaways(giveaways);
     }
 });
 
