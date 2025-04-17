@@ -27,5 +27,7 @@ for (const file of commandFiles) {
 console.log('Loaded commands:', [...client.commands.keys()]); // ✅ Confirm commands are loaded
 
 // Event: When the bot is ready
+// Event: When the bot is ready
 client.once('ready', () => {
-    console.log(`✅ Logged in as ${client.user
+    console.log(`✅ Logged in as ${client.user.tag}!`);
+});
