@@ -1,5 +1,5 @@
-const fs = require("fs");
-const path = require("path");
+import fs = require("fs");
+import path = require("path");
 
 module.exports = {
   name: "timer",
