@@ -1,5 +1,4 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
-const { token } = require('./config.json'); // Assuming you store the token in config.json
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
@@ -112,4 +111,4 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // Log the bot in
-client.login(token);
+client.login(process.env.token);
