@@ -40,13 +40,24 @@ client.on('messageCreate', async (message) => {
         let hasTimer = args.slice(-4).every(arg => /^\d+$/.test(arg)); // Check if last four args are numbers
         let timeArgs = hasTimer ? args.slice(-4) : ['1', '0', '0', '0']; // Default to 1 day if no valid timer
 
-        // Platform is everything after the code, code is the last argument before the platform
-        let platform = hasTimer ? args.slice(-5).join(' ') : args.slice(-1).join(' ');
-        let code = hasTimer ? args[args.length - 6] : args[args.length - 2];
+        // Now, to find the correct position for the code and platform:
+        let code, platform;
 
-        // The rest is the game name (everything before the code)
-        let gameNameEndIndex = hasTimer ? args.length - 6 : args.length - 2;
-        let gameName = args.slice(1, gameNameEndIndex).join(' ');
+        // We search for the first alphanumeric code and treat everything after that as the platform
+        const codeIndex = args.findIndex(arg => /^[A-Za-z0-9]+$/.test(arg));
+
+        if (codeIndex === -1) {
+            return message.reply('No valid code found!');
+        }
+
+        // The code is the element at codeIndex
+        code = args[codeIndex];
+
+        // Platform is everything after the code
+        platform = args.slice(codeIndex + 1).join(' ');
+
+        // The game name is everything before the code
+        let gameName = args.slice(1, codeIndex).join(' ');
 
         // Ensure we get the correct values for the time in milliseconds
         const [days, hours, minutes, seconds] = timeArgs.map(Number);
