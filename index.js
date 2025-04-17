@@ -6,7 +6,10 @@ const {
     ButtonStyle,
     ActionRowBuilder
 } = require('discord.js');
-const { saveGiveaways, loadGiveaways } = require('./giveawayManager.js');  // Assuming you've created the giveaway manager
+
+// Removed the token from config.json
+// const { token } = require('./config.json'); 
+const { keepAlive } = require('./keep_alive.js'); 
 
 const client = new Client({
     intents: [
@@ -16,7 +19,7 @@ const client = new Client({
     ]
 });
 
-const giveaways = loadGiveaways();
+const giveaways = {};
 
 client.once('ready', () => {
     console.log(`${client.user.tag} is now online!`);
@@ -35,16 +38,13 @@ client.on('messageCreate', async (message) => {
             return message.reply('Usage: !host <game name> <code> <platform> [days hours minutes seconds]');
         }
 
-        let timeArgs = args.slice(-4); // Get the last 4 arguments to check if they are timer values
-        // If timer values are not valid, set defaults to 1 day, 0 hours, 0 minutes, 0 seconds
-        if (timeArgs.length !== 4 || !timeArgs.every(arg => /^\d+$/.test(arg))) {
-            timeArgs = ['1', '0', '0', '0']; // Default to 1 day
-        }
-
+        // Check if the last 4 args are numbers (time values)
+        const timeArgs = args.slice(-4).every(arg => /^\d+$/.test(arg)) ? args.slice(-4) : ['1', '0', '0', '0']; // Default to 1 day if time is not provided
         const [days, hours, minutes, seconds] = timeArgs.map(Number);
         const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
 
-        const baseArgs = timeArgs === ['1', '0', '0', '0'] ? args : args.slice(0, -4);
+        // If no time args are given, automatically assign the default values
+        const baseArgs = timeArgs === ['1', '0', '0', '0'] ? args.slice(0, -4) : args.slice(0, -4);
 
         const platform = baseArgs[baseArgs.length - 1];
         const code = baseArgs[baseArgs.length - 2];
@@ -53,16 +53,13 @@ client.on('messageCreate', async (message) => {
         const giveawayId = `${gameName}-${Date.now()}`;
 
         giveaways[giveawayId] = {
-            hostId: message.author.id,
+            host: message.author,
             gameName,
             code,
             platform,
             claimed: false,
             messageId: null,
-            timeout: null,
-            createdAt: Date.now(),
-            durationMs: timeInMs,
-            channelId: message.channel.id
+            timeout: null
         };
 
         const claimButton = new ButtonBuilder()
@@ -75,7 +72,7 @@ client.on('messageCreate', async (message) => {
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle(`Game Giveaway: ${gameName}`)
-            .setDescription(`Hosted by: ${message.author.username}#${message.author.discriminator}\nPlatform: ${platform}`)
+            .setDescription(`Hosted by: ${message.author.tag}\nPlatform: ${platform}`)
             .setFooter({ text: 'Click the button to claim the key!' });
 
         const giveawayMessage = await message.channel.send({ embeds: [embed], components: [row] });
@@ -91,30 +88,22 @@ client.on('messageCreate', async (message) => {
 
                 try {
                     await giveawayMessage.edit({ embeds: [expiredEmbed], components: [] });
-                    const host = await client.users.fetch(giveaways[giveawayId].hostId);
-                    await host.send(`Your giveaway for **${gameName}** has expired. No one claimed the code.`);
+                    await giveaways[giveawayId].host.send(`Your giveaway for **${gameName}** has expired. No one claimed the code.`);
                 } catch (err) {
                     console.error('Failed to notify host:', err);
                 }
                 delete giveaways[giveawayId];
-                saveGiveaways(giveaways);
             }
         }, timeInMs);
 
         await message.delete();
-        saveGiveaways(giveaways);
     }
 
     // !list - Shows active giveaways
     if (message.content.startsWith('!list')) {
-        const activeGiveaways = [];
-
-        for (const giveaway of Object.values(giveaways)) {
-            if (!giveaway.claimed) {
-                const host = await client.users.fetch(giveaway.hostId); // Fetch host info
-                activeGiveaways.push(`**${giveaway.gameName}** hosted by ${host.username}#${host.discriminator} [Platform: ${giveaway.platform}]`);
-            }
-        }
+        const activeGiveaways = Object.values(giveaways)
+            .filter(giveaway => !giveaway.claimed)
+            .map(giveaway => `**${giveaway.gameName}** hosted by ${giveaway.host.tag} [Platform: ${giveaway.platform}]`);
 
         if (activeGiveaways.length === 0) {
             return message.reply('There are no active giveaways at the moment.');
@@ -169,7 +158,7 @@ client.on('interactionCreate', async (interaction) => {
         const claimedEmbed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle(`Game Giveaway: ${giveaway.gameName}`)
-            .setDescription(`Hosted by: ${giveaway.hostId}\nPlatform: ${giveaway.platform}`)
+            .setDescription(`Hosted by: ${giveaway.host.tag}\nPlatform: ${giveaway.platform}`)
             .addFields({
                 name: 'Claimed by:',
                 value: `${interaction.user.tag}`,
@@ -184,7 +173,6 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         delete giveaways[giveawayId];
-        saveGiveaways(giveaways);
     }
 });
 
