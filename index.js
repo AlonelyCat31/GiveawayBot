@@ -36,13 +36,18 @@ client.on('messageCreate', async (message) => {
             return message.reply('Usage: !host <game name> <code> <platform> [days hours minutes seconds]');
         }
 
-        // Detect timer args
+        // Detect timer arguments
         let hasTimer = args.slice(-4).every(arg => /^\d+$/.test(arg));
         let timeArgs = hasTimer ? args.slice(-4) : ['1', '0', '0', '0'];
 
-        let platform = hasTimer ? args.slice(-5, -4).join(' ') : args.slice(-2, -1).join(' ');
-        let code = hasTimer ? args[args.length - 6] : args[args.length - 2];
-        let gameName = args.slice(1, args.length - (hasTimer ? 6 : 2)).join(' ');
+        // Step 1: Identify where the alphanumeric code is (it may contain letters and numbers)
+        let codeIndex = args.findIndex(arg => /^[a-zA-Z0-9]+$/.test(arg));  // Find first alphanumeric argument (the code)
+        
+        // Step 2: Everything before the code is the game name
+        let gameName = args.slice(1, codeIndex).join(' ');  // Join the elements before the code into the game name
+
+        // Step 3: The platform is everything after the code
+        let platform = args.slice(codeIndex + 1, args.length - (hasTimer ? 4 : 0)).join(' ');  // Platform can have multiple words
 
         const [days, hours, minutes, seconds] = timeArgs.map(Number);
         const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
@@ -52,7 +57,7 @@ client.on('messageCreate', async (message) => {
         giveaways[giveawayId] = {
             host: message.author,
             gameName,
-            code,
+            code: args[codeIndex],
             platform,
             claimed: false,
             messageId: null,
