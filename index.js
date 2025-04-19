@@ -43,6 +43,7 @@ const giveaways = {};
 const prizeHistory = [];
 let currentPage = 1;
 const entriesPerPage = 10;
+const { keepAlive } = require('./keep_alive.js');
 
 client.once('ready', () => {
     console.log(`${client.user.tag} is now online!`);
