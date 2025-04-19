@@ -1,18 +1,46 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
-const { DiscordAPIError } = require('discord.js'); 
-const { keepAlive } = require('./keep_alive.js'); 
+// Override process.stderr.write to filter out the ephemeral deprecation warning
+const originalStderrWrite = process.stderr.write;
+process.stderr.write = function (chunk, encoding, callback) {
+    if (typeof chunk === 'string' && chunk.includes('Supplying "ephemeral" for interaction response options is deprecated')) {
+        return true; // Skip writing the warning to stderr
+    }
+    return originalStderrWrite.apply(process.stderr, arguments); // Write other messages
+};
+
+const {
+    Client,
+    GatewayIntentBits,
+    EmbedBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ActionRowBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    Partials,
+    InteractionType
+} = require('discord.js');
+const { DiscordAPIError } = require('discord.js');
+
+// Suppress specific deprecated warnings
+process.on('warning', (warning) => {
+    if (warning.name === 'DeprecationWarning' && warning.message.includes('Supplying "ephemeral" for interaction response options is deprecated')) {
+        return; // Ignore the specific ephemeral deprecation warning
+    }
+    console.warn(warning); // Log other warnings
+});
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent
-    ]
+    ],
+    partials: [Partials.Channel]
 });
 
 const giveaways = {};
-const prizeHistory = [];  // Array to store giveaway history
-
+const prizeHistory = [];
 let currentPage = 1;
 const entriesPerPage = 10;
 
@@ -40,88 +68,46 @@ client.on('messageCreate', async (message) => {
 
     const args = message.content.trim().split(/\s+/);
 
-    // Host a giveaway
+    // Host a giveaway via button and modal
     if (message.content.startsWith('!host')) {
-        if (args.length < 4) {
-            return message.reply('Usage: !host <game name> <code> <platform> [days hours minutes seconds]');
-        }
+        const button = new ButtonBuilder()
+            .setCustomId(`open_giveaway_modal_${message.id}`)
+            .setLabel('🎁 Host a Giveaway')
+            .setStyle(ButtonStyle.Primary);
 
-        let hasTimer = args.slice(-4).every(arg => /^\d+$/.test(arg));
-        let timeArgs = hasTimer ? args.slice(-4) : ['1', '0', '0', '0'];
-
-        let platform = hasTimer ? args[args.length - 5] : args[args.length - 1];
-        let code = hasTimer ? args[args.length - 6] : args[args.length - 2];
-        let gameNameEndIndex = hasTimer ? args.length - 6 : args.length - 2;
-        let gameName = args.slice(1, gameNameEndIndex).join(' ');
-
-        const [days, hours, minutes, seconds] = timeArgs.map(Number);
-        const timeInMs = ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
-
-        const giveawayId = `${gameName}-${Date.now()}`;
-
-        // Duplicate code check
-        const duplicateCode = Object.values(giveaways).some(giveaway => giveaway.code === code);
-        if (duplicateCode) {
-            await message.delete(); // Delete the host's message if code is duplicate
-            return message.reply('❌ This code has already been used in another giveaway. Please use a unique code.');
-        }
-
-        const endsAt = Date.now() + timeInMs;
-
-        giveaways[giveawayId] = {
-            host: message.author,
-            gameName,
-            code,
-            platform,
-            claimed: false,
-            messageId: null,
-            timeout: null,
-            endsAt
-        };
-
-        const claimButton = new ButtonBuilder()
-            .setCustomId(`claim_button_${giveawayId}`)
-            .setLabel('Claim Key')
-            .setStyle(ButtonStyle.Success);
-
-        const row = new ActionRowBuilder().addComponents(claimButton);
+        const row = new ActionRowBuilder().addComponents(button);
 
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
-            .setTitle(`Game Giveaway: ${gameName}`)
-            .setDescription(`Hosted by: ${message.author.tag}\nPlatform: ${platform}\n\n`) // Added space below Platform
-            .setFooter({ text: 'Click the button to claim the key!' });
+            .setTitle('Host a Giveaway')
+            .setDescription('Click the button below to open the giveaway form!');
 
-        const giveawayMessage = await message.channel.send({ embeds: [embed], components: [row] });
+        // Send the embed and store the message ID for later deletion
+        const hostMessage = await message.reply({ embeds: [embed], components: [row] });
+        giveaways[`host_${message.id}`] = { hostMessageId: hostMessage.id, userMessageId: message.id };
 
-        giveaways[giveawayId].messageId = giveawayMessage.id;
+        // Add a collector to expire the embed after 60 seconds if no interaction
+        const filter = i => i.customId === `open_giveaway_modal_${message.id}` && i.user.id === message.author.id;
+        const collector = hostMessage.createMessageComponentCollector({ filter, time: 60000 });
 
-        giveaways[giveawayId].timeout = setTimeout(async () => {
-            if (!giveaways[giveawayId].claimed) {
-                const expiredEmbed = new EmbedBuilder()
-                    .setColor(0xFF0000)
-                    .setTitle(`Game Giveaway: ${gameName}`)
-                    .setDescription(`\n\nThe giveaway has ended! Unfortunately, no one claimed the key in time.`);  // Added space above "The giveaway has ended!"
-
+        collector.on('end', async (collected) => {
+            if (collected.size === 0) {
                 try {
-                    await giveawayMessage.edit({ embeds: [expiredEmbed], components: [] });
-                    await giveaways[giveawayId].host.send(`Your giveaway for **${gameName}** has expired. No one claimed the code.`);
+                    const channel = await client.channels.fetch(message.channelId);
+                    await channel.messages.delete(hostMessage.id);
+                    await channel.messages.delete(message.id);
+                    delete giveaways[`host_${message.id}`];
                 } catch (err) {
-                    console.error('Failed to notify host:', err);
+                    console.error('Failed to delete expired host messages:', err);
                 }
-                delete giveaways[giveawayId];
             }
-        }, timeInMs);
-
-        await message.delete(); // Delete the original message even after successful hosting
+        });
     }
-
-
 
     // View all active giveaways
     if (message.content.startsWith('!list')) {
         const activeGiveaways = Object.entries(giveaways)
-            .filter(([_, giveaway]) => !giveaway.claimed)
+            .filter(([id, giveaway]) => !id.startsWith('host_') && !giveaway.claimed)
             .map(([id, giveaway], index) => {
                 const timeLeft = Math.max(0, giveaway.endsAt - Date.now());
                 const timeString = formatTime(timeLeft);
@@ -145,7 +131,7 @@ client.on('messageCreate', async (message) => {
         const index = parseInt(args[1]);
         if (isNaN(index)) return message.reply('Please provide a valid giveaway number.');
 
-        const giveawayEntries = Object.entries(giveaways).filter(([_, g]) => !g.claimed);
+        const giveawayEntries = Object.entries(giveaways).filter(([id, g]) => !id.startsWith('host_') && !g.claimed);
         const [id, giveaway] = giveawayEntries[index - 1] || [];
 
         if (!id) return message.reply('Giveaway not found.');
@@ -175,7 +161,7 @@ client.on('messageCreate', async (message) => {
         const index = parseInt(args[1]);
         if (isNaN(index)) return message.reply('Please provide a valid giveaway number.');
 
-        const giveawayEntries = Object.entries(giveaways).filter(([_, g]) => !g.claimed);
+        const giveawayEntries = Object.entries(giveaways).filter(([id, g]) => !id.startsWith('host_') && !g.claimed);
         const [id, giveaway] = giveawayEntries[index - 1] || [];
 
         if (!id) return message.reply('Giveaway not found.');
@@ -204,30 +190,25 @@ client.on('messageCreate', async (message) => {
     if (message.content.startsWith('!help')) {
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
-            .setTitle('Available Commands')
-            .setDescription('Here are the available commands for this bot:')
-            .addFields(
-                { name: '!host <game name> <code> <platform> [days hours minutes seconds]', value: 'Host a giveaway. Time is optional (defaults to 1 day).' },
-                { name: '!list', value: 'Shows a list of all active giveaways.' },
-                { name: '!remove <number>', value: 'Remove a giveaway you hosted using its number from the list.' },
-                { name: '!end <number>', value: 'End a giveaway early that you hosted.' },
-                { name: '!help', value: 'Displays this help message.' },
-                { name: '!history', value: 'Displays the history of all past giveaways and their winners.' }
-            );
+            .setTitle('Giveaway Bot Commands')
+            .setDescription('Available commands:\n\n' +
+                '**!host** - Opens a form to host a giveaway.\n' +
+                '**!list** - Shows all active giveaways.\n' +
+                '**!remove <number>** - Remove a giveaway you hosted.\n' +
+                '**!end <number>** - End a giveaway early.\n' +
+                '**!history** - View past giveaways and winners.')
+            .setFooter({ text: 'Use !host to start a giveaway!' });
 
         await message.reply({ embeds: [embed] });
     }
 
-    // History command for everyone to see past winners
+    // History command
     if (message.content.startsWith('!history')) {
         if (prizeHistory.length === 0) {
             return message.reply('No giveaways have ended yet.');
         }
 
-        // Calculate total pages
         const totalPages = Math.ceil(prizeHistory.length / entriesPerPage);
-
-        // Get the entries for the current page
         const startIdx = (currentPage - 1) * entriesPerPage;
         const endIdx = currentPage * entriesPerPage;
         const entriesToShow = prizeHistory.slice(startIdx, endIdx);
@@ -239,16 +220,13 @@ client.on('messageCreate', async (message) => {
             .addFields(
                 ...entriesToShow.map((entry, index) => ({
                     name: `${startIdx + index + 1}. ${entry.gameName} [${entry.platform}]`,
-                    value: `Winner: ${entry.winner}\nHost: ${entry.host}`,
+                    value: `Winner: **${entry.winner}**\nHost: ${entry.host}`,
                     inline: false
                 }))
             )
             .setFooter({ text: `Page ${currentPage} of ${totalPages}` });
 
-        // Create pagination buttons
         const row = new ActionRowBuilder();
-
-        // Previous button
         if (currentPage > 1) {
             row.addComponents(
                 new ButtonBuilder()
@@ -257,8 +235,6 @@ client.on('messageCreate', async (message) => {
                     .setStyle(ButtonStyle.Primary)
             );
         }
-
-        // Next button
         if (currentPage < totalPages) {
             row.addComponents(
                 new ButtonBuilder()
@@ -268,10 +244,9 @@ client.on('messageCreate', async (message) => {
             );
         }
 
-        const historyMessage = await message.reply({ embeds: [historyEmbed], components: [row] });
+        const historyMessage = await message.reply({ embeds: [historyEmbed], components: row.components.length ? [row] : [] });
 
-        // Handle button interactions for pagination
-        const filter = i => i.user.id === message.author.id; // Only allow the command author to interact
+        const filter = i => i.user.id === message.author.id;
         const collector = historyMessage.createMessageComponentCollector({ filter, time: 60000 });
 
         collector.on('collect', async (interaction) => {
@@ -281,7 +256,6 @@ client.on('messageCreate', async (message) => {
                 currentPage++;
             }
 
-            // Recreate the embed with updated page number and content
             const updatedEmbed = new EmbedBuilder()
                 .setColor(0x0099FF)
                 .setTitle('Giveaway Prizes History')
@@ -289,89 +263,321 @@ client.on('messageCreate', async (message) => {
                 .addFields(
                     ...prizeHistory.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage).map((entry, index) => ({
                         name: `${(currentPage - 1) * entriesPerPage + index + 1}. ${entry.gameName} [${entry.platform}]`,
-                        value: `Winner: **${entry.winner}**`,  // Bold winner name
+                        value: `Winner: **${entry.winner}**\nHost: ${entry.host}`,
                         inline: false
                     }))
                 )
                 .setFooter({ text: `Page ${currentPage} of ${totalPages}` });
 
-            // Update the message with the new embed and buttons
-            await interaction.update({ embeds: [updatedEmbed], components: [row] });
+            const updatedRow = new ActionRowBuilder();
+            if (currentPage > 1) {
+                updatedRow.addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('prev_page')
+                        .setLabel('Previous')
+                        .setStyle(ButtonStyle.Primary)
+                );
+            }
+            if (currentPage < totalPages) {
+                updatedRow.addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('next_page')
+                        .setLabel('Next')
+                        .setStyle(ButtonStyle.Primary)
+                );
+            }
+
+            try {
+                await interaction.update({ embeds: [updatedEmbed], components: updatedRow.components.length ? [updatedRow] : [] });
+            } catch (err) {
+                if (err instanceof DiscordAPIError && err.code === 10062) {
+                    return;
+                }
+                console.error('Failed to update history interaction:', err);
+            }
         });
 
         collector.on('end', async () => {
-            // Disable the buttons after timeout
-            await historyMessage.edit({ components: [] });
+            try {
+                await historyMessage.edit({ components: [] });
+            } catch (err) {
+                console.error('Failed to disable history buttons:', err);
+            }
         });
     }
 });
 
 client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isButton()) return;
+    // Modal button for giveaway creation
+    if (interaction.isButton() && interaction.customId.startsWith('open_giveaway_modal_')) {
+        const messageId = interaction.customId.split('_').pop();
+        const modal = new ModalBuilder()
+            .setCustomId(`giveaway_form_${messageId}`)
+            .setTitle('Host a Giveaway');
 
-    const giveawayId = interaction.customId.split('_').slice(2).join('_');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('gameName')
+                    .setLabel('Game Name')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+            ),
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('code')
+                    .setLabel('Key / Code')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+            ),
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('platform')
+                    .setLabel('Platform (Steam, Epic, etc)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+            ),
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('optionalFields')
+                    .setLabel('Optional: Duration, Expiry Date, Region Locks')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setPlaceholder('e.g.\nDuration: 1d 2h 30m\nExpiry: 2025-12-31\nRegion: NA, EU\n(Short forms: Dur:, Exp:, Reg:)')
+                    .setRequired(false)
+            )
+        );
 
-    if (!giveaways[giveawayId]) return;
+        try {
+            await interaction.showModal(modal);
+        } catch (err) {
+            if (err instanceof DiscordAPIError && err.code === 10062) {
+                return;
+            }
+            console.error('Failed to show modal:', err);
+        }
+    }
 
-    const giveaway = giveaways[giveawayId];
+    // Handle modal submission
+    if (interaction.type === InteractionType.ModalSubmit && interaction.customId.startsWith('giveaway_form_')) {
+        const messageId = interaction.customId.split('_').pop();
+        const hostData = giveaways[`host_${messageId}`];
+        if (!hostData) {
+            try {
+                return interaction.reply({ content: '❌ Host data not found.', ephemeral: true });
+            } catch (err) {
+                if (err instanceof DiscordAPIError && err.code === 10062) {
+                    return;
+                }
+                console.error('Failed to send host data error reply:', err);
+            }
+            return;
+        }
 
-    if (giveaway.claimed) {
-        if (!interaction.replied) {
-            await interaction.reply({
-                content: '❌ This key has already been claimed!',
-                flags: 64 // flags: 64 makes it ephemeral
+        const gameName = interaction.fields.getTextInputValue('gameName');
+        const code = interaction.fields.getTextInputValue('code');
+        const platform = interaction.fields.getTextInputValue('platform');
+        const optionalFields = interaction.fields.getTextInputValue('optionalFields') || '';
+
+        // Parse optional fields with flexible formats
+        let durationInput = '';
+        let expiryDate = 'Never';
+        let regionLocks = 'Global';
+
+        const lines = optionalFields.split('\n').map(line => line.trim());
+        const fieldRegex = /^(duration|dur|expiry date|expiry|exp|region locks|region|reg)\s*:+\s*(.*)$/i;
+
+        for (const line of lines) {
+            const match = line.match(fieldRegex);
+            if (match) {
+                const field = match[1].toLowerCase();
+                const value = match[2].trim() || '';
+
+                if (['duration', 'dur'].includes(field)) {
+                    durationInput = value;
+                } else if (['expiry date', 'expiry', 'exp'].includes(field)) {
+                    expiryDate = value || 'Never';
+                } else if (['region locks', 'region', 'reg'].includes(field)) {
+                    regionLocks = value || 'Global';
+                }
+            }
+        }
+
+        if (Object.values(giveaways).some(g => !g.hostMessageId && g.code === code)) {
+            try {
+                return interaction.reply({ content: '❌ This code is already used in another giveaway.', ephemeral: true });
+            } catch (err) {
+                if (err instanceof DiscordAPIError && err.code === 10062) {
+                    return;
+                }
+                console.error('Failed to send duplicate code error reply:', err);
+            }
+            return;
+        }
+
+        let timeInMs = 86400000; // Default 1 day
+        if (durationInput) {
+            const regex = /(?:(\d+)d)?\s*(?:(\d+)h)?\s*(?:(\d+)m)?/;
+            const match = durationInput.match(regex);
+            if (match) {
+                const [, d = 0, h = 0, m = 0] = match.map(n => parseInt(n) || 0);
+                timeInMs = ((d * 24 + h) * 60 + m) * 60 * 1000;
+            }
+        }
+
+        const giveawayId = `${gameName}-${Date.now()}`;
+        const endsAt = Date.now() + timeInMs;
+
+        const claimButton = new ButtonBuilder()
+            .setCustomId(`claim_button_${giveawayId}`)
+            .setLabel('Claim Key')
+            .setStyle(ButtonStyle.Success);
+
+        const row = new ActionRowBuilder().addComponents(claimButton);
+
+        const embed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle(`Game Giveaway: ${gameName}`)
+            .setDescription(`Hosted by: ${interaction.user.tag}\n` +
+                            `Platform: ${platform}\n` +
+                            `Expiry Date: ${expiryDate}\n` +
+                            `Region Locks: ${regionLocks}`)
+            .setFooter({ text: 'Click the button to claim the key!' });
+
+        const giveawayMessage = await interaction.channel.send({ embeds: [embed], components: [row] });
+
+        giveaways[giveawayId] = {
+            host: interaction.user,
+            gameName,
+            code,
+            platform,
+            expiryDate,
+            regionLocks,
+            claimed: false,
+            messageId: giveawayMessage.id,
+            timeout: null,
+            endsAt
+        };
+
+        giveaways[giveawayId].timeout = setTimeout(async () => {
+            if (!giveaways[giveawayId].claimed) {
+                const expiredEmbed = new EmbedBuilder()
+                    .setColor(0xFF0000)
+                    .setTitle(`Game Giveaway: ${gameName}`)
+                    .setDescription(`This giveaway has expired. No one claimed the key.`);
+                await giveawayMessage.edit({ embeds: [expiredEmbed], components: [] });
+                delete giveaways[giveawayId];
+            }
+        }, timeInMs);
+
+        // Delete the user's !host message and the bot's embed
+        try {
+            const channel = await client.channels.fetch(interaction.channelId);
+            await channel.messages.delete(hostData.userMessageId);
+            await channel.messages.delete(hostData.hostMessageId);
+        } catch (err) {
+            console.error('Failed to delete host messages:', err);
+        }
+
+        // Clean up host data
+        delete giveaways[`host_${messageId}`];
+
+        try {
+            await interaction.reply({ content: '✅ Giveaway successfully created!', ephemeral: true });
+        } catch (err) {
+            if (err instanceof DiscordAPIError && err.code === 10062) {
+                return;
+            }
+            console.error('Failed to send success reply:', err);
+        }
+    }
+
+    // Handle claim button
+    if (interaction.isButton() && interaction.customId.startsWith('claim_button_')) {
+        const giveawayId = interaction.customId.replace('claim_button_', '');
+        const giveaway = giveaways[giveawayId];
+
+        if (!giveaway || giveaway.claimed) {
+            try {
+                return interaction.reply({ content: '❌ This key has already been claimed or does not exist.', ephemeral: true });
+            } catch (err) {
+                if (err instanceof DiscordAPIError && err.code === 10062) {
+                    return;
+                }
+                console.error('Failed to send claim error reply:', err);
+            }
+            return;
+        }
+
+        try {
+            await interaction.user.send(`🎉 You've claimed **${giveaway.gameName}** on **${giveaway.platform}**!\nHere’s your key: **${giveaway.code}**`);
+            await giveaway.host.send(`✅ **${interaction.user.tag}** has claimed the giveaway for **${giveaway.gameName}**.`);
+        } catch (err) {
+            if (err instanceof DiscordAPIError && err.code === 50007) {
+                try {
+                    return interaction.reply({
+                        content: '⚠️ I couldn’t DM you the key. Please enable DMs and try again.',
+                        ephemeral: true
+                    });
+                } catch (replyErr) {
+                    if (replyErr instanceof DiscordAPIError && replyErr.code === 10062) {
+                        return;
+                    }
+                    console.error('Failed to send DM error reply:', replyErr);
+                }
+            } else {
+                console.error('Unexpected error when trying to send DM:', err);
+                try {
+                    return interaction.reply({ content: '⚠️ An unexpected error occurred. Please try again.', ephemeral: true });
+                } catch (replyErr) {
+                    if (replyErr instanceof DiscordAPIError && replyErr.code === 10062) {
+                        return;
+                    }
+                    console.error('Failed to send unexpected error reply:', replyErr);
+                }
+            }
+            return;
+        }
+
+        giveaway.claimed = true;
+        clearTimeout(giveaway.timeout);
+
+        const claimedEmbed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle(`Game Giveaway: ${giveaway.gameName}`)
+            .setDescription(`Hosted by: ${giveaway.host.tag}\n` +
+                            `Platform: ${giveaway.platform}\n` +
+                            `Expiry Date: ${giveaway.expiryDate}\n` +
+                            `Region Locks: ${giveaway.regionLocks}`)
+            .addFields({ name: 'Claimed by', value: interaction.user.tag })
+            .setFooter({ text: 'The giveaway has ended!' });
+
+        try {
+            const channel = await client.channels.fetch(interaction.channelId);
+            const msg = await channel.messages.fetch(giveaway.messageId);
+            await msg.edit({ embeds: [claimedEmbed], components: [] });
+        } catch (err) {
+            console.error('Failed to update giveaway message:', err);
+        }
+
+        if (interaction.user.id !== giveaway.host.id) {
+            prizeHistory.push({
+                gameName: giveaway.gameName,
+                platform: giveaway.platform,
+                winner: interaction.user.tag,
+                host: giveaway.host.tag,
             });
         }
-        return;
-    }
 
-    try {
-        await interaction.user.send(`🎉 You've claimed **${giveaway.gameName}** on **${giveaway.platform}**!\nHere’s your key: **${giveaway.code}**`);
-        await giveaway.host.send(`✅ **${interaction.user.tag}** has claimed the giveaway for **${giveaway.gameName}**.`);
-    } catch (err) {
-        if (err instanceof DiscordAPIError && err.code === 50007) {
-            // User has DMs closed — notify them privately (ephemeral), do not log error
-            await interaction.reply({
-                content: '⚠️ I couldn’t DM you the key. Please enable DMs and try again.',
-                flags: 64
-            });
-        } else {
-            console.error('Unexpected error when trying to send DM:', err);
+        delete giveaways[giveawayId];
+        try {
+            await interaction.reply({ content: '🎉 You have successfully claimed the giveaway!', ephemeral: true });
+        } catch (err) {
+            if (err instanceof DiscordAPIError && err.code === 10062) {
+                return;
+            }
+            console.error('Failed to send claim success reply:', err);
         }
-        return;
     }
-
-    // ✅ DM worked — proceed with ending the giveaway
-    giveaway.claimed = true;
-    clearTimeout(giveaway.timeout);
-
-    const claimedEmbed = new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle(`Game Giveaway: ${giveaway.gameName}`)
-        .setDescription(`Hosted by: ${giveaway.host.tag}\nPlatform: ${giveaway.platform}`)
-        .addFields({
-            name: 'Claimed by:',
-            value: `${interaction.user.tag}`,
-            inline: true
-        })
-        .setFooter({ text: 'The giveaway has ended!' });
-
-    try {
-        await interaction.message.edit({ embeds: [claimedEmbed], components: [] });
-    } catch (err) {
-        console.error('Failed to update giveaway message:', err);
-    }
-
-    if (interaction.user.id !== giveaway.host.id) {
-        prizeHistory.push({
-            gameName: giveaway.gameName,
-            platform: giveaway.platform,
-            winner: interaction.user.tag,
-            host: giveaway.host.tag,
-        });
-    }
-
-    delete giveaways[giveawayId];
 });
 
 client.login(process.env.token);
